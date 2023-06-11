@@ -10,11 +10,10 @@ using namespace std;
 #pragma warning(disable:4996)
 
 void mesh_region(double D, double dx, double dy, int Nx, int Ny, int* R);
-//void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
+void assembly(int Ny, int Nx, double k_bat, double k_pcm, double* ap, double* ae, double* aw, double* an, double* as, double dx, double dy, int* R);
+void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
 void plotRegions(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
-//void assembly(int Ny, int Nx, double* ap, double* ae, double* aw, double* an, double* as, double* sp,
-	//double* su, double k, double dx, double dy, double tk, double qo, double Tn, double Aw, double Ae, double An, double As);
-//void SOR(int N, int Nx, int Ny, double* ap, double* ae, double* aw, double* an, double* as, double* su, double* T, double* Ta);
+void find_k(int Ny, int Nx, double dx, double dy, double k_bat, double k_pcm, double kn, double ks, double kw, double ke, double kp, int i, int j, int o, int* R);
 
 int main() {
 
@@ -29,7 +28,6 @@ int main() {
 	double dx = 0.001; // CV dimension in x direction [m]
 	double dy = 0.001; // CV dimension in y direction [m]
 	const int N = (int)Nx * Ny; // Total number of CVs
-
 
 	// Output file info
 	char ffn[40];
@@ -46,7 +44,7 @@ int main() {
 	double* ry = (double*)malloc((N) * sizeof(double));
 	double* T = (double*)malloc((N) * sizeof(double));
 	int* R = (int*)malloc((N) * sizeof(int));
-
+	
 	for (int i = 0; i < N; i++) {
 
 		ap[i] = 0.0;
@@ -83,8 +81,7 @@ int main() {
 	// -------------------------- SIMULATION CODE ------------------------//
 	mesh_region(D, dx, dy, Nx, Ny, R);
 	plotRegions(Nx, Ny, dx, dy, R, ffn);
-	
-	//assembly(Ny, Nx, ap, ae, aw, an, as, sp, su, k, dx, dy, tk, qo, Tn, Aw, Aw, An, As);
+	assembly(Ny, Nx, k_bat, k_pcm, ap, ae, aw, an, as, dx, dy, R);
 	// SOR(N, Nx, Ny, ap, ae, aw, an, as, su, T, Ta);
 	// ---------------------------------- --------------------------------//
 	return 0;
@@ -120,25 +117,29 @@ void mesh_region(double D, double dx, double dy, int Nx, int Ny, int *R) {
 				R[o] = 0;
 			}
 
-			printf("CV = %i\t x = %5.1E\t y = %5.1E\t radius = %5.1E\t Region = %i\n", o, x, y, radius, R[o]);
+			//printf("CV = %i\t x = %5.1E\t y = %5.1E\t radius = %5.1E\t Region = %i\n", o, x, y, radius, R[o]);
 		}
 		
 }
 
-void assembly(int Ny, int Nx, double* ap, double* ae, double* aw, double* an, double* as, double* sp, double* su, double k, double dx, double dy, double tk, double qo, double Tn, double Aw, double Ae, double An, double As)
+void assembly(int Ny, int Nx, double k_bat, double k_pcm, double* ap, double* ae, double* aw, double* an, double* as, double dx, double dy, int* R)
 {
 	int i, j, o;
-
+	double kn = 0.0;
+	double ks = 0.0;
+	double kw = 0.0;
+	double ke = 0.0;
+	double kp = 0.0;
+	
 	for (i = 0; i < Nx; i++)
 		for (j = 0; j < Ny; j++) {
 
 			o = (i * Ny) + j;
-			aw[o] = Aw * (k / dx);
-			ae[o] = Ae * (k / dx);
-			an[o] = An * (k / dy);
-			as[o] = As * (k / dy);
-			sp[o] = 0.0;
-			su[o] = 0.0;
+			find_k(Ny, Nx, dx, dy, k_bat, k_pcm, kn, ks, kw, ke, kp, i, j, o, R);
+			ae[o] = (2 * ke * kp) / (dx * (ke * dx + kp * dx));
+			aw[o] = (2 * kw * kp) / (dx * (kw * dx + kp * dx));
+			an[o] = (2 * kn * kp) / (dy * (kn * dy + kp * dy));
+			as[o] = (2 * ks * kp) / (dy * (ks * dy + ks * dy));
 
 			//Condição de contorno - Face norte
 			if (j == Ny - 1) {
@@ -166,60 +167,68 @@ void assembly(int Ny, int Nx, double* ap, double* ae, double* aw, double* an, do
 
 				aw[o] = 0;
 
-
 			}
 
 			//Calculo do ap
-			ap[o] = aw[o] + ae[o] + an[o] + as[o] - sp[o];
+			ap[o] = aw[o] + ae[o] + an[o] + as[o];
 
-			//printf("CV = %i\t i = %i\t j = %i\n", o, i, j);
 			//printf("CV = %i\t an = %5.1E\t as = %5.1E\t aw = %5.1E\t ae = %5.1E\t ap = %5.1E\t su = %5.1E\n", o, an[o], as[o], aw[o], ae[o], ap[o], su[o]);
 
 		}
 }
 
-void SOR(int N, int Nx, int Ny, double* ap, double* ae, double* aw, double* an, double* as, double* su, double* T, double* Ta) {
+void find_k(int Ny, int Nx, double dx, double dy, double k_bat, double k_pcm, double kn, double ks, double kw, double ke, double kp, int i, int j, int o, int* R) {
 
-	int i, j, o, ow, oe, on, os, it = 0;
-	double R;
-	double res = 1.0;
-	double kappa = 1000.0;
-	double resmax = 1E-6;
+	int ow, oe, on, os;
+	double kW, kE, kN, kS = 0.0;
 
-	printf("\nSolver SOR:\n");
-
-	while (res > resmax) {
-
-		res = 0.0;
-
-		for (i = 0; i < Nx; i++)
-			for (j = 0; j < Ny; j++) {
-
-				o = (i * Ny) + j;
-				ow = ((i - 1) * Ny) + j;
-				oe = ((i + 1) * Ny) + j;
-				on = (i * Ny) + (j + 1);
-				os = (i * Ny) + (j - 1);
-
-				Ta[o] = T[o];
-				R = su[o] + aw[o] * T[ow] + ae[o] * T[oe] + as[o] * T[os] + an[o] * T[on];
-				T[o] = (T[o] + kappa * (R / ap[o])) / (1 + kappa);
-
-				res = res + (Ta[o] - T[o]) * (Ta[o] - T[o]);
-
-			}
-
-		printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
-		it++;
+	ow = ((i - 1) * Ny) + j; // Id - West neighbor
+	oe = ((i + 1) * Ny) + j; // Id - East neighbor
+	on = (i * Ny) + (j + 1); // Id - North neighbor
+	os = (i * Ny) + (j - 1); // Id - South neighbor
+	
+	if (R[o] == 1) {
+		kp = k_bat;
+	}
+	else {
+		kp = k_pcm;
 	}
 
-	printf("\nSolucao:\n");
-
-	for (i = 0; i < N; i++) {
-
-		printf("T%i = \t %f\n", i, T[i]);
-
+	if (R[ow] == 1) {
+		kW = k_bat;
 	}
+	else {
+		kW = k_pcm;
+	}
+
+	if (R[oe] == 1) {
+		kE = k_bat;
+	}
+	else {
+		kE = k_pcm;
+	}
+
+	if (R[on] == 1) {
+		kN = k_bat;
+	}
+	else {
+		kN = k_pcm;
+	}
+
+	if (R[os] == 1) {
+		kS = k_bat;
+	}
+	else {
+		kS = k_pcm;
+	}
+
+	ke = (kp * kE * 2 * dx) / (kE * dx + kp * dx);
+	kw = (kp * kW * 2 * dx) / (kW * dx + kp * dx);
+	kn = (kp * kN * 2 * dy) / (kN * dy + kp * dy);
+	ks = (kp * kS * 2 * dy) / (kS * dy + kp * dy);
+
+	//printf("CV = %i\t kn = %5.1E\t ks = %5.1E\t kw = %5.1E\t ke = %5.1E\t kp = %5.1E\t Region = %i\n", o, kn, ks, kw, ke, kp, R[o]);
+
 }
 
 void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]) {
