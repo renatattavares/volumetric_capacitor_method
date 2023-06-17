@@ -3,18 +3,18 @@ Temperature °C plot
 ASCII
 
 DATASET RECTILINEAR_GRID
-DIMENSIONS 5 5 1
+DIMENSIONS 10 10 1
 
-Y_COORDINATES 5 float
-0.0025 0.0075 0.0125 0.0175 0.0225 
+Y_COORDINATES 10 float
+0.0025 0.0075 0.0125 0.0175 0.0225 0.0275 0.0325 0.0375 0.0425 0.0475 
 
-X_COORDINATES 5 float
-0.0025 0.0075 0.0125 0.0175 0.0225 
+X_COORDINATES 10 float
+0.0025 0.0075 0.0125 0.0175 0.0225 0.0275 0.0325 0.0375 0.0425 0.0475 
 
 Z_COORDINATES 1 float
 0
 
-POINT_DATA 25
+POINT_DATA 100
 SCALARS Region int
 LOOKUP_TABLE my_table
 0
@@ -23,19 +23,94 @@ LOOKUP_TABLE my_table
 0
 0
 0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+1
+1
+0
+0
+0
+0
+0
+0
+0
+1
 1
 1
 1
 0
 0
-1
-1
-1
+0
+0
 0
 0
 1
 1
 1
+1
+0
+0
+0
+0
+0
+0
+0
+1
+1
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
 0
 0
 0
@@ -44,6 +119,81 @@ LOOKUP_TABLE my_table
 0
 SCALARS Temperature float
 LOOKUP_TABLE my_table
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
 0
 0
 0
