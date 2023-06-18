@@ -9,9 +9,11 @@ using namespace std;
 
 #pragma warning(disable:4996)
 
-void assembly(int N, double dx, double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt);
+void assembly(int N, double dx, double Tw, double Te, double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt);
 void SOR(int N, double dx, double* ap, double* ae, double* aw, double* s, double* T, double* Ti, double* b, double dt);
+void ft(int N, double* T, double*& f, double*& fi);
 void kt(int N, double* T, double*& k, double*& ki);
+void interface_k(int o, int N, double* k, double& ke, double& kw);
 
 int main() {
 
@@ -21,12 +23,7 @@ int main() {
 	// Mesh Properties
 	const int N = 5; // Volumes in x direction
 	const double dx = 0.004; // CV dimension in x direction [m]
-	double dt = 1;	   // Time step [s] 
-	double time = dt;
-	bool converged = false;
-	double resmax = 1E-6;
-	int i = 0;
-
+	
 	// ---------------------------------- --------------------------------//
 	// Allocating memory and cleaning any previously stored value
 	double* res = (double*)malloc((N) * sizeof(double));
@@ -36,6 +33,8 @@ int main() {
 	double* Ti = (double*)malloc((N) * sizeof(double));
 	double* sp = (double*)malloc((N) * sizeof(double));
 	double* ki = (double*)malloc((N) * sizeof(double));
+	double* fi = (double*)malloc((N) * sizeof(double));
+	double* f = (double*)malloc((N) * sizeof(double));
 	double* k = (double*)malloc((N) * sizeof(double));
 	double* b = (double*)malloc((N) * sizeof(double));
 	double* s = (double*)malloc((N) * sizeof(double));
@@ -59,10 +58,8 @@ int main() {
 	}
 	// ---------------------------------- --------------------------------//
 	// Physical properties
-
 	double rhocp = 10000000;
-	//double k = 10.0;
-	double TotalTime = 120; // Total simulation time [s]
+	
 
 
 	// ------------------------ BOUNDARY CONDITIONS ----------------------//
@@ -71,13 +68,20 @@ int main() {
 
 	// -------------------------- SIMULATION CODE ------------------------//
 
+	bool converged = false; // Property convergence indicator
+	double resmax = 1E-3;	// Maximum property residue 
+	double dt = 1;			// Time step [s] 
+	double time = dt;		// Current time step [s] 
+	double TotalTime = 120; // Total simulation time [s]
+	int i = 0;
+
 	while (time <= TotalTime) {
 
 		converged = false;
 
 		while (converged == false) {
 
-			assembly(N, dx, ap, ae, aw, s, sp, k, rhocp, T, Ti, b, dt);
+			assembly(N, dx, Tw, Te, ap, ae, aw, s, sp, k, rhocp, T, Ti, b, dt);
 			SOR(N, dx, ap, ae, aw, s, T, Ti, b, dt);
 			kt(N, T, k, ki);
 
@@ -86,7 +90,7 @@ int main() {
 			for (i = 0; i < N; i++) {
 
 				res[i] = abs(k[i] - ki[i]);
-				printf("CV = %i\t Residuo = %13.5E\n", i, res[i]);
+				//printf("CV = %i\t Residuo = %13.5E\n", i, res[i]);
 
 				if (res[i] > resmax) {
 
@@ -165,7 +169,7 @@ int main() {
 
 }
 
-void assembly(int N, double dx, double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt)
+void assembly(int N, double dx, double Tw, double Te,  double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt)
 {
 	int o;
 	double kw = 0.0;
@@ -173,23 +177,7 @@ void assembly(int N, double dx, double* ap, double* ae, double* aw, double* s, d
 
 	for (o = 0; o < N; o++) {
 
-		if ((o - 1) >= 0)
-		{
-			kw = (k[o] + k[o - 1]) / 2;
-		}
-		else
-		{
-			kw = 0;
-		}
-
-		if ((o + 1) < N)
-		{
-			ke = (k[o] + k[o + 1]) / 2;
-		}
-		else
-		{
-			ke = 0;
-		}
+		interface_k(o, N, k, ke, kw);
 	
 		ae[o] = (ke / (dx * dx));
 		aw[o] = (kw / (dx * dx));
@@ -200,6 +188,7 @@ void assembly(int N, double dx, double* ap, double* ae, double* aw, double* s, d
 
 			ae[o] = 0;
 			sp[o] = -(2 * k[o]) / (dx * dx);
+			s[o] = ((2 * k[o]) / (dx * dx)) * Te;
 
 		}
 
@@ -252,6 +241,28 @@ void SOR(int N, double dx, double* ap, double* ae, double* aw, double* s, double
 
 }
 
+void ft(int N, double* T, double* &f, double* &fi) {
+
+	int i;
+
+	for (i = 0; i < N; i++) {
+
+		fi[i] = f[i];
+		f[i] = 0.2 * T[i] - 5;
+
+		if (f[i] < 0) {
+		
+			f[i] = 0;
+		
+		}
+		if (f[i] > 1){
+
+			f[i] = 1;
+
+		}
+	}
+}
+
 void kt(int N, double* T, double* &k, double* &ki) {
 
 	int i;
@@ -259,8 +270,30 @@ void kt(int N, double* T, double* &k, double* &ki) {
 	for (i = 0; i < N; i++) {
 
 		ki[i] = k[i];
-		k[i] = 10; //+ 0.001 * T[i];
+		k[i] = 10; // +0.001 * T[i];
 
 	}
 	
+}
+
+void interface_k(int o, int N, double* k, double &ke, double &kw) {
+
+	if ((o - 1) >= 0)
+	{
+		kw = (k[o] + k[o - 1]) / 2;
+	}
+	else
+	{
+		kw = 0;
+	}
+
+	if ((o + 1) < N)
+	{
+		ke = (k[o] + k[o + 1]) / 2;
+	}
+	else
+	{
+		ke = 0;
+	}
+
 }
