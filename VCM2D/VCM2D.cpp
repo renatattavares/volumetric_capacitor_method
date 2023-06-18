@@ -4,11 +4,28 @@
 #include <fstream>
 #include <string>
 #include <time.h>
-#include "VCM2D.h"
 
 using namespace std;
 
 #pragma warning(disable:4996)
+
+// Preprocessing
+
+// Processing
+void ft(int N, double* T, double*& f, double*& fi);
+void kt(int N, double* T, double*& k, double*& ki);
+
+void find_k(double dx, double dy, int* R, int o, int ow, int oe, int on, int os, double& kp, double& kw, double& ke, double& kn, double& ks);
+void find_rho(int o, double& rho, double& rhoi, double* T, double* Ti);
+void find_f(int o, int& f, int& fi, double* T, double* Ti);
+void assembly(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s, double cp, double L, double* T, double* Ti, double* b, double dt);
+void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s, double k_bat, double k_pcm, double rho_pcm_solid, double rho_pcm_liquid, double cp, double L, double* T, double* Ti, double Tmelt, double* b, double dt, int* f, int* fi, double* fres);
+
+
+// Post Processing
+void mesh_regions(double D, double dx, double dy, int Nx, int Ny, int* R);
+void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T);
+//void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
 
 int main() {
 
@@ -34,55 +51,57 @@ int main() {
 
 	// ---------------------------------- --------------------------------//
 	// Allocating memory and cleaning any previously stored value
+	double* kres = (double*)malloc((N) * sizeof(double));
 	double* fres = (double*)malloc((N) * sizeof(double));
 	double* ap = (double*)malloc((N) * sizeof(double));
-	double* ae = (double*)malloc((N) * sizeof(double));
 	double* aw = (double*)malloc((N) * sizeof(double));
+	double* ae = (double*)malloc((N) * sizeof(double));
 	double* an = (double*)malloc((N) * sizeof(double));
 	double* as = (double*)malloc((N) * sizeof(double));
 	double* Ti = (double*)malloc((N) * sizeof(double));
+	double* fi = (double*)malloc((N) * sizeof(double));
+	double* ki = (double*)malloc((N) * sizeof(double));
+	double* sp = (double*)malloc((N) * sizeof(double));
+	double* k = (double*)malloc((N) * sizeof(double));
+	double* f = (double*)malloc((N) * sizeof(double));
 	double* b = (double*)malloc((N) * sizeof(double));
 	double* s = (double*)malloc((N) * sizeof(double));
 	double* T = (double*)malloc((N) * sizeof(double));
-	int* fi = (int*)malloc((N) * sizeof(int));
-	int* f = (int*)malloc((N) * sizeof(int));
 	int* R = (int*)malloc((N) * sizeof(int));
 
 	for (int i = 0; i < N; i++) {
 
 		// Floats
+		kres[i] = 0.0;
 		fres[i] = 0.0;
 		ap[i] = 0.0;
+		aw[i] = 0.0;
 		ae[i] = 0.0;
 		an[i] = 0.0;
 		as[i] = 0.0;
-		aw[i] = 0.0;
-		Ti[i] = 15;
-		T[i] = 15;
+		Ti[i] = 200;
+		fi[i] = 0.0;
+		ki[i] = 10.0;
+		f[i] = 0.0;
+		k[i] = 10.0;
+		T[i] = 0.0;
 		b[i] = 0.0;
 		s[i] = 0.0;
 		T[i] = 0.0;
-		// Integers
-		fi[i] = 0;
-		f[i] = 0;
 		R[i] = 0;
 
 	}
-	// ---------------------------------- --------------------------------//
-	// Physical properties
+	// ------------------------ PHYSICAL PROPERTIES ----------------------//
 	// Selected PCM: RT 18 HC [T_melt = 18°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kgK, k = 2 kJ/kgK, rho = 880 <-> 770 kg/m³ (solid/liquid)]
 
-	double Tmelt = 18;			 // PCM melting temperature [°C]
-	double rho_pcm_solid = 880;  // PCM density in solid state [kg/m³]
-	double rho_pcm_liquid = 770; // PCM density in liquid state [kg/m³]
-	double k_bat = 1000.0;       // Battery effective thermal conductivity [W/m.K]
-	double k_pcm = 2.0;          // PCM thermal conductivity [W/m.K]
-	double cp = 2;				 // PCM specific heat at constante pressure [kJ/kg.K]
-	double L = 250;				 // PCM latent heat of fusion [kJ/kg]
-	double TotalTime = 1200;		 // Total simulation time [s]
-	
+	double rho = 1000;       // PCM density in solid state [kg/m³]
+	//double k_bat = 10.0;     // Battery effective thermal conductivity [W/m.K]
+	//double k_pcm = 2.0;      // PCM thermal conductivity [W/m.K]
+	double cp = 2000;			 // PCM specific heat at constante pressure [J/kg.K]
+	double L = 250000;			 // PCM latent heat of fusion [J/kg]
 
-	// ---------------------------------- --------------------------------//
+
+	// ------------------------ BOUNDARY CONDITIONS ----------------------//
 	// Temperatures for boundary conditions
 	double Tn = 0.0; // North
 	double Ts = 0.0; // South 
@@ -94,37 +113,57 @@ int main() {
 	double qs = 0.0; // South 
 	double qe = 0.0; // East
 	double qw = 0.0; // West
-	// ---------------------------------- --------------------------------//
-
+	
 	// -------------------------- SIMULATION CODE ------------------------//
+	bool converged = false; // Property convergence indicator
+	double resmax = 1E-3;	// Maximum property residue 
+	double dt = 1;			// Time step [s] 
+	double time = dt;		// Current time step [s] 
+	double TotalTime = 120; // Total simulation time [s]
+	int i = 0;
+	
 	mesh_regions(D, dx, dy, Nx, Ny, R);
 	plot_regions(Nx, Ny, dx, dy, ffn, R, T);
 	
 	while (time <= TotalTime) {
 
-		fconverged = false;
+		converged = false;
 
-		while (fconverged == false) {
+		while (converged == false) {
 
 			assembly(Nx, Ny, dx, dy, R, ap, ae, aw, an, as, s, cp, L, T, Ti, b, dt);
-			SOR(Nx, Ny, dx, dy, R, ap, ae, aw, an, as, s, k_bat, k_pcm, rho_pcm_solid, rho_pcm_liquid, cp, L, T, Ti, Tmelt, b, dt, f, fi, fres);
+			SOR(Nx, Ny, dx, dy, R, ap, ae, aw, an, as, s, k_bat, k_pcm, rho, cp, L, T, Ti, b, dt, f, fi, fres);
+			kt(N, T, k, ki);
+			ft(N, T, f, fi);
 
-			fconverged = areAllElementsSmaller(fres, N, fresmax);
+			converged = true;
 
-		}
+			for (i = 0; i < N; i++) {
 
-		printf("// ----- Solution for Time = %f ----- //\n", time);
+				kres[i] = abs(k[i] - ki[i]);
+				fres[i] = abs(f[i] - fi[i]);
+				printf("CV = %i\t f = %f\t Residuo = %13.5E\n", i, f[i], fres[i]);
 
-		for (i = 0; i < N; i++) {
-			
-			
-			printf("T%i = \t %f\n", i, T[i]);
+				if ((kres[i] > resmax) && (fres[i] > resmax)) {
 
-		}
+					converged = false;
 
-		time = time + dt;
+				}
+			}
 
-	}
+			if (converged == true) {
+
+				printf("\n// ----- Solution for time = %f ----- //\n", time);
+
+				for (i = 0; i < N; i++) {
+
+					printf("T%i = %f\n", i, T[i]);
+
+				}
+
+				time = time + dt;
+
+			}
 	
 	return 0;
 
@@ -507,13 +546,4 @@ void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, d
 			fres[o] = fres[o] + abs(fi[o] - f[o]);
 
 		}
-}
-
-bool areAllElementsSmaller(double* ptr, int size, double value) {
-	for (int i = 0; i < size; ++i) {
-		if (ptr[i] >= value) {
-			return false; // If any element is not smaller, return false
-		}
-	}
-	return true; // All elements are smaller
 }

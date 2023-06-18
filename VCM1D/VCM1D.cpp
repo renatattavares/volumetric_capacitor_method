@@ -9,7 +9,7 @@ using namespace std;
 
 #pragma warning(disable:4996)
 
-void assembly(int N, double dx, double Tw, double Te, double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt);
+void assembly(int N, double dx, double Tw, double Te, double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double rho, double L, double* T, double* Ti, double* b, double* f, double* fi, double dt);
 void SOR(int N, double dx, double* ap, double* ae, double* aw, double* s, double* T, double* Ti, double* b, double dt);
 void ft(int N, double* T, double*& f, double*& fi);
 void kt(int N, double* T, double*& k, double*& ki);
@@ -21,12 +21,13 @@ int main() {
 	//char ffn[40];
 
 	// Mesh Properties
-	const int N = 5; // Volumes in x direction
+	const int N = 5000; // Volumes in x direction
 	const double dx = 0.004; // CV dimension in x direction [m]
 	
 	// ---------------------------------- --------------------------------//
 	// Allocating memory and cleaning any previously stored value
-	double* res = (double*)malloc((N) * sizeof(double));
+	double* kres = (double*)malloc((N) * sizeof(double));
+	double* fres = (double*)malloc((N) * sizeof(double));
 	double* ap = (double*)malloc((N) * sizeof(double));
 	double* ae = (double*)malloc((N) * sizeof(double));
 	double* aw = (double*)malloc((N) * sizeof(double));
@@ -43,27 +44,29 @@ int main() {
 	for (int i = 0; i < N; i++) {
 
 		// Floats
-		res[i] = 0.0;
+		kres[i] = 0.0;
+		fres[i] = 0.0;
 		ap[i] = 0.0;
 		ae[i] = 0.0;
 		aw[i] = 0.0;
-		Ti[i] = 200.0;
+		Ti[i] = 15.0;
 		T[i] = 0.0;
 		k[i] = 10.0;
 		ki[i] = 10.0;
+		f[i] = 0.0;
+		fi[i] = 0.0;
 		b[i] = 0.0;
 		s[i] = 0.0;
 		T[i] = 0.0;
 
 	}
-	// ---------------------------------- --------------------------------//
-	// Physical properties
+	// ------------------------ PHYSICAL PROPERTIES ----------------------//
 	double rhocp = 10000000;
+	double rho = 5000000;
+	double L = 100;
 	
-
-
 	// ------------------------ BOUNDARY CONDITIONS ----------------------//
-	double Te = 0.0; // East
+	double Te = 50.0; // East
 	double Tw = 0.0; // West
 
 	// -------------------------- SIMULATION CODE ------------------------//
@@ -81,18 +84,20 @@ int main() {
 
 		while (converged == false) {
 
-			assembly(N, dx, Tw, Te, ap, ae, aw, s, sp, k, rhocp, T, Ti, b, dt);
+			assembly(N, dx, Tw, Te, ap, ae, aw, s, sp, k, rhocp, rho, L, T, Ti, b, f, fi, dt);
 			SOR(N, dx, ap, ae, aw, s, T, Ti, b, dt);
 			kt(N, T, k, ki);
+			ft(N, T, f, fi);
 
 			converged = true;
 
 			for (i = 0; i < N; i++) {
 
-				res[i] = abs(k[i] - ki[i]);
-				//printf("CV = %i\t Residuo = %13.5E\n", i, res[i]);
+				kres[i] = abs(k[i] - ki[i]);
+				fres[i] = abs(f[i] - fi[i]);
+				printf("CV = %i\t f = %f\t Residuo = %13.5E\n", i, f[i], fres[i]);
 
-				if (res[i] > resmax) {
+				if ((kres[i] > resmax) && (fres[i] > resmax)) {
 
 					converged = false;
 
@@ -169,7 +174,8 @@ int main() {
 
 }
 
-void assembly(int N, double dx, double Tw, double Te,  double* ap, double* ae, double* aw, double* s, double* sp, double* k, double rhocp, double* T, double* Ti, double* b, double dt)
+void assembly(int N, double dx, double Tw, double Te,  double* ap, double* ae, double* aw, double* s, double* sp, double* k, 
+	double rhocp, double rho, double L, double* T, double* Ti, double* b, double* f, double* fi, double dt)
 {
 	int o;
 	double kw = 0.0;
@@ -201,7 +207,7 @@ void assembly(int N, double dx, double Tw, double Te,  double* ap, double* ae, d
 
 		//Calculo do ap e do b
 		ap[o] = aw[o] + ae[o] + ((rhocp) / dt) - sp[o];
-		b[o] = s[o] + ((rhocp) / dt) * Ti[o];
+		b[o] = s[o] + ((rhocp) / dt) * Ti[o] + ((rho * L * (f[o] - fi[o])) / dt);
 
 		//printf("CV = %i\t kw = %5.1E\t ke = %5.1E\t k = 10.0\n", o, kw, ke);
 		//printf("CV = %i\t f = %i\t fi = %i\t rho = %5.1E\t rhoi = %5.1E\t Region = %i\n", o, f, fi, rho, rhoi, R[o]);
@@ -270,7 +276,7 @@ void kt(int N, double* T, double* &k, double* &ki) {
 	for (i = 0; i < N; i++) {
 
 		ki[i] = k[i];
-		k[i] = 10; // +0.001 * T[i];
+		k[i] = 10 + 0.001 * T[i];
 
 	}
 	
