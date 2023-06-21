@@ -4,28 +4,18 @@
 #include <fstream>
 #include <string>
 #include <time.h>
+#include "VCM2D.h"
 
 using namespace std;
 
 #pragma warning(disable:4996)
-
-// Preprocessing
-
-// Processing
-void ft(int N, double* T, double*& f, double*& fi);
-void kt(int N, double* T, double*& k, double*& ki);
-
-void find_k(double dx, double dy, int* R, int o, int ow, int oe, int on, int os, double& kp, double& kw, double& ke, double& kn, double& ks);
-void find_rho(int o, double& rho, double& rhoi, double* T, double* Ti);
-void find_f(int o, int& f, int& fi, double* T, double* Ti);
-void assembly(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s, double cp, double L, double* T, double* Ti, double* b, double dt);
-void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s, double k_bat, double k_pcm, double rho_pcm_solid, double rho_pcm_liquid, double cp, double L, double* T, double* Ti, double Tmelt, double* b, double dt, int* f, int* fi, double* fres);
-
-
-// Post Processing
-void mesh_regions(double D, double dx, double dy, int Nx, int Ny, int* R);
 void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T);
-//void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
+void assembly(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
+	double cp, double L, double* T, double* Ti, double* b, double dt);
+void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
+void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
+	double k_bat, double k_pcm, double rho_pcm_solid, double rho_pcm_liquid, double cp, double L, double* T, double* Ti, double Tmelt,
+	double* b, double dt, int* f, int* fi, double* fres);
 
 int main() {
 
@@ -113,7 +103,7 @@ int main() {
 	double qs = 0.0; // South 
 	double qe = 0.0; // East
 	double qw = 0.0; // West
-	
+
 	// -------------------------- SIMULATION CODE ------------------------//
 	bool converged = false; // Property convergence indicator
 	double resmax = 1E-3;	// Maximum property residue 
@@ -121,10 +111,10 @@ int main() {
 	double time = dt;		// Current time step [s] 
 	double TotalTime = 120; // Total simulation time [s]
 	int i = 0;
-	
-	mesh_regions(D, dx, dy, Nx, Ny, R);
+
+	// mesh_regions(D, dx, dy, Nx, Ny, R);
 	plot_regions(Nx, Ny, dx, dy, ffn, R, T);
-	
+
 	while (time <= TotalTime) {
 
 		converged = false;
@@ -164,43 +154,11 @@ int main() {
 				time = time + dt;
 
 			}
-	
-	return 0;
 
-}
+			return 0;
 
-void mesh_regions(double D, double dx, double dy, int Nx, int Ny, int* R) {
-
-	// This funtion will define each mesh region based on the distance between the battery cell center and the CV center.
-
-	int i, j, o;
-	double x_center, y_center, x, y, radius;
-	double cell_radius = D / 2;
-	double x_cell = (Nx * dx) / 2;
-	double y_cell = (Ny * dy) / 2;
-
-	for (i = 0; i < Nx; i++)
-		for (j = 0; j < Ny; j++) {
-
-			o = (i * Ny) + j;
-			x_center = (dx * 0.5) + i * dx;
-			y_center = (dy * 0.5) + j * dx;
-			x = x_center - x_cell;
-			y = y_center - y_cell;
-			radius = sqrt(pow(x, 2) + pow(y, 2));
-
-			if (radius < cell_radius) {
-
-				R[o] = 1;
-			}
-			else {
-
-				R[o] = 0;
-			}
-
-			//printf("CV = %i\t x = %5.1E\t y = %5.1E\t radius = %5.1E\t Region = %i\n", o, x, y, radius, R[o]);
 		}
-
+	}
 }
 
 void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T) {
@@ -275,108 +233,6 @@ void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, do
 	fout.close();
 	cout << "\nDone." << endl;
 	cout << "_________________________________________________________________________" << endl << endl;
-
-}
-
-void find_k(double dx, double dy, int* R, int o, int ow, int oe, int on, int os, double& kp, double& kw, double& ke, double& kn, double& ks)
-{
-	double kWest = 0.0;
-	double kEast = 0.0;
-	double kNorth = 0.0;
-	double kSouth = 0.0;
-	double k_bat = 1000.0;       // Battery effective thermal conductivity [W/m.K]
-	double k_pcm = 2.0;          // PCM thermal conductivity [W/m.K]
-
-	if (R[o] == 1) {
-		kp = k_bat;
-	}
-	else {
-		kp = k_pcm;
-	}
-
-	if (R[ow] == 1) {
-		kWest = k_bat;
-	}
-	else {
-		kWest = k_pcm;
-	}
-
-	if (R[oe] == 1) {
-		kEast = k_bat;
-	}
-	else {
-		kEast = k_pcm;
-	}
-
-	if (R[on] == 1) {
-		kNorth = k_bat;
-	}
-	else {
-		kNorth = k_pcm;
-	}
-
-	if (R[os] == 1) {
-		kSouth = k_bat;
-	}
-	else {
-		kSouth = k_pcm;
-	}
-
-	ke = (kp * kEast * 2 * dx) / (kEast * dx + kp * dx);
-	kw = (kp * kWest * 2 * dx) / (kWest * dx + kp * dx);
-	kn = (kp * kNorth * 2 * dy) / (kNorth * dy + kp * dy);
-	ks = (kp * kSouth * 2 * dy) / (kSouth * dy + kp * dy);
-
-}
-
-void find_rho(int o, double& rho, double& rhoi, double* T, double* Ti)
-{
-
-	double Tmelt = 18;			 // PCM melting temperature [°C]
-	double rho_pcm_solid = 880;  // PCM density in solid state [kg/m³]
-	double rho_pcm_liquid = 770; // PCM density in liquid state [kg/m³]
-
-	if (T[o] > Tmelt) {
-
-		rho = rho_pcm_liquid;
-
-	}
-	else {
-
-		rho = rho_pcm_solid;
-
-	}
-
-	if (Ti[o] > Tmelt) {
-
-		rhoi = rho_pcm_liquid;
-
-	}
-	else {
-
-		rhoi = rho_pcm_solid;
-
-	}
-}
-
-void find_f(int o, int& f, int& fi, double* T, double* Ti)
-{
-
-	double Tmelt = 18;
-
-	if (T[o] > Tmelt) {
-		f = 1;
-	}
-	else {
-		f = 0;
-	}
-
-	if (Ti[o] > Tmelt) {
-		fi = 1;
-	}
-	else {
-		fi = 0;
-	}
 
 }
 

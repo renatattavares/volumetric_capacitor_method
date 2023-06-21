@@ -21,7 +21,7 @@ int main() {
 	//char ffn[40];
 
 	// Mesh Properties
-	const int N = 5000; // Volumes in x direction
+	const int N = 5; // Volumes in x direction
 	const double dx = 0.004; // CV dimension in x direction [m]
 	
 	// ---------------------------------- --------------------------------//
@@ -49,7 +49,7 @@ int main() {
 		ap[i] = 0.0;
 		ae[i] = 0.0;
 		aw[i] = 0.0;
-		Ti[i] = 15.0;
+		Ti[i] = 200.0;
 		T[i] = 0.0;
 		k[i] = 10.0;
 		ki[i] = 10.0;
@@ -66,7 +66,7 @@ int main() {
 	double L = 100;
 	
 	// ------------------------ BOUNDARY CONDITIONS ----------------------//
-	double Te = 50.0; // East
+	double Te = 0.0; // East
 	double Tw = 0.0; // West
 
 	// -------------------------- SIMULATION CODE ------------------------//
@@ -254,7 +254,7 @@ void ft(int N, double* T, double* &f, double* &fi) {
 	for (i = 0; i < N; i++) {
 
 		fi[i] = f[i];
-		f[i] = 0.2 * T[i] - 5;
+		f[i] = 0;//0.2 * T[i] - 5;
 
 		if (f[i] < 0) {
 		
@@ -276,7 +276,7 @@ void kt(int N, double* T, double* &k, double* &ki) {
 	for (i = 0; i < N; i++) {
 
 		ki[i] = k[i];
-		k[i] = 10 + 0.001 * T[i];
+		k[i] = 10; //+ 0.001 * T[i];
 
 	}
 	
