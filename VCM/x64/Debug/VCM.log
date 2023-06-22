@@ -1,5 +1,0 @@
-﻿  Source.cpp
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM\Source.cpp(28,7): warning C4101: 'ffn': unreferenced local variable
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM\Source.cpp(179,12): warning C4101: 'm': unreferenced local variable
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM\Source.cpp(233,9): warning C4101: 'j': unreferenced local variable
-  VCM.vcxproj -> C:\Users\renat\source\repos\volumetric_capacitor_method\VCM\x64\Debug\VCM.exe

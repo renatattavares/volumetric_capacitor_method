@@ -4,18 +4,23 @@
 #include <fstream>
 #include <string>
 #include <time.h>
-#include "VCM2D.h"
 
 using namespace std;
 
 #pragma warning(disable:4996)
-void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T);
-void assembly(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
-	double cp, double L, double* T, double* Ti, double* b, double dt);
-void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
-void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
-	double k_bat, double k_pcm, double rho_pcm_solid, double rho_pcm_liquid, double cp, double L, double* T, double* Ti, double Tmelt,
-	double* b, double dt, int* f, int* fi, double* fres);
+
+// Processing
+void ft(int N, double* T, double*& f, double*& fi);
+void kt(int N, double* T, double*& k, double*& ki);
+void map(int Nx, int Ny, double D, double dx, double dy, int* ww, int* ee, int* nn, int* ss, int* R);
+void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks);
+void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an, double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double rho, double cp, double L, double* f, double* fi, double dt);
+void SOR(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti);
+
+
+// Post Processing
+//void plots(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T);
+//void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
 
 int main() {
 
@@ -28,16 +33,11 @@ int main() {
 	double h = 0.065; // Battery cell height [m]
 
 	// Mesh Properties
-	const int Nx = 10; // Volumes in x direction
-	const int Ny = 10; // Volumes in y direction 
-	double dx = 0.005; // CV dimension in x direction [m]
-	double dy = 0.005; // CV dimension in y direction [m]
+	const int Nx = 5; // Volumes in x direction
+	const int Ny = 2; // Volumes in y direction 
+	double dx = 0.004; // CV dimension in x direction [m]
+	double dy = 0.004; // CV dimension in y direction [m]
 	const int N = (int)Nx * Ny; // Total number of CVs
-	double dt = 2;	   // Time step [s] 
-	double time = dt;
-	bool fconverged = false;
-	double fresmax = 1E-3;
-	int i = 0;
 
 	// ---------------------------------- --------------------------------//
 	// Allocating memory and cleaning any previously stored value
@@ -57,7 +57,12 @@ int main() {
 	double* b = (double*)malloc((N) * sizeof(double));
 	double* s = (double*)malloc((N) * sizeof(double));
 	double* T = (double*)malloc((N) * sizeof(double));
+
 	int* R = (int*)malloc((N) * sizeof(int));
+	int* ee = (int*)malloc((N) * sizeof(int));     //Coeficiente a Leste
+	int* ww = (int*)malloc((N) * sizeof(int));     //Coeficiente a Oeste
+	int* nn = (int*)malloc((N) * sizeof(int));     //Coeficiente a Leste
+	int* ss = (int*)malloc((N) * sizeof(int));     //Coeficiente a Oeste
 
 	for (int i = 0; i < N; i++) {
 
@@ -65,11 +70,16 @@ int main() {
 		kres[i] = 0.0;
 		fres[i] = 0.0;
 		ap[i] = 0.0;
+		ww[i] = 0;
+		ee[i] = 0;
+		nn[i] = 0;
+		ss[i] = 0;
+		ap[i] = 0.0;
 		aw[i] = 0.0;
 		ae[i] = 0.0;
 		an[i] = 0.0;
 		as[i] = 0.0;
-		Ti[i] = 200;
+		Ti[i] = 200.0;
 		fi[i] = 0.0;
 		ki[i] = 10.0;
 		f[i] = 0.0;
@@ -81,15 +91,15 @@ int main() {
 		R[i] = 0;
 
 	}
+
 	// ------------------------ PHYSICAL PROPERTIES ----------------------//
 	// Selected PCM: RT 18 HC [T_melt = 18°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kgK, k = 2 kJ/kgK, rho = 880 <-> 770 kg/m³ (solid/liquid)]
 
-	double rho = 1000;       // PCM density in solid state [kg/m³]
-	//double k_bat = 10.0;     // Battery effective thermal conductivity [W/m.K]
-	//double k_pcm = 2.0;      // PCM thermal conductivity [W/m.K]
-	double cp = 2000;			 // PCM specific heat at constante pressure [J/kg.K]
-	double L = 250000;			 // PCM latent heat of fusion [J/kg]
-
+	double rhocp = 10000000;       // PCM density in solid state [kg/m³]
+	//double k_bat = 10.0;   // Battery effective thermal conductivity [W/m.K]
+	//double k_pcm = 2.0;    // PCM thermal conductivity [W/m.K]
+	double cp = 2;		 // PCM specific heat at constante pressure [J/kg.K]
+	double L = 100;		 // PCM latent heat of fusion [J/kg]
 
 	// ------------------------ BOUNDARY CONDITIONS ----------------------//
 	// Temperatures for boundary conditions
@@ -105,24 +115,27 @@ int main() {
 	double qw = 0.0; // West
 
 	// -------------------------- SIMULATION CODE ------------------------//
+	//int i;
 	bool converged = false; // Property convergence indicator
-	double resmax = 1E-3;	// Maximum property residue 
+	double resmax = 0.1;	// Maximum property residue 
 	double dt = 1;			// Time step [s] 
 	double time = dt;		// Current time step [s] 
 	double TotalTime = 120; // Total simulation time [s]
 	int i = 0;
 
-	// mesh_regions(D, dx, dy, Nx, Ny, R);
-	plot_regions(Nx, Ny, dx, dy, ffn, R, T);
-
+	map(Nx, Ny, D, dx, dy, ww, ee, nn, ss, R);
+	//assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rhocp, cp, L, f, fi, dt);
+	//SOR(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+	
+	
 	while (time <= TotalTime) {
 
 		converged = false;
 
 		while (converged == false) {
 
-			assembly(Nx, Ny, dx, dy, R, ap, ae, aw, an, as, s, cp, L, T, Ti, b, dt);
-			SOR(Nx, Ny, dx, dy, R, ap, ae, aw, an, as, s, k_bat, k_pcm, rho, cp, L, T, Ti, b, dt, f, fi, fres);
+			assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rhocp, cp, L, f, fi, dt);
+			SOR(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
 			kt(N, T, k, ki);
 			ft(N, T, f, fi);
 
@@ -132,9 +145,9 @@ int main() {
 
 				kres[i] = abs(k[i] - ki[i]);
 				fres[i] = abs(f[i] - fi[i]);
-				printf("CV = %i\t f = %f\t Residuo = %13.5E\n", i, f[i], fres[i]);
+				//printf("CV = %i\t f = %f\t Residuo = %13.5E\n", i, f[i], fres[i]);
 
-				if ((kres[i] > resmax) && (fres[i] > resmax)) {
+				if ((kres[i] > resmax) or (fres[i] > resmax)) {
 
 					converged = false;
 
@@ -154,14 +167,161 @@ int main() {
 				time = time + dt;
 
 			}
+		}
+	}
+	
 
-			return 0;
+	//plots(Nx, Ny, dx, dy, ffn, R, T);
+
+	return 0;
+}
+
+void map(int Nx, int Ny, double D, double dx, double dy, int* ww, int* ee, int* nn, int* ss, int* R) {
+
+	int i, j, m, o = 0;
+	double x_center, y_center, x, y, radius;
+	double cell_radius = D / 2;
+	double x_cell = (Nx * dx) / 2;
+	double y_cell = (Ny * dy) / 2;
+
+	for (i = 0; i < Nx; i++) {
+		for (j = 0; j < Ny; j++) {
+
+			// Mesh Regions
+			x_center = (dx * 0.5) + i * dx;
+			y_center = (dy * 0.5) + j * dx;
+			x = x_center - x_cell;
+			y = y_center - y_cell;
+			radius = sqrt(pow(x, 2) + pow(y, 2));
+
+			if (radius < cell_radius) {
+
+				R[o] = 1;
+			}
+			else {
+
+				R[o] = 0;
+			}
+
+			// Mesh Navigation
+			o = (i * Ny) + j;
+			ww[o] = ((i - 1) * Ny) + j; // Id - West neighbor
+			ee[o] = ((i + 1) * Ny) + j; // Id - East neighbor
+			nn[o] = (i * Ny) + (j + 1); // Id - North neighbor
+			ss[o] = (i * Ny) + (j - 1); // Id - South neighbor
+
+			if (i == 0) {
+				ww[o] = Nx * Ny;
+			}
+			if (i == Nx - 1) {
+				ee[o] = Nx * Ny;
+			}
+			if (j == 0) {
+				ss[o] = Nx * Ny;
+			}
+			if (j == Ny - 1) {
+				nn[o] = Nx * Ny;
+			}
 
 		}
 	}
+
 }
 
-void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T) {
+void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an,
+	double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti,
+	double rhocp, double cp, double L, double* f, double* fi, double dt) {
+
+	int i, j, x, y;
+	int o = 0;
+	double kw = 0.0;
+	double ke = 0.0;
+	double kn = 0.0;
+	double ks = 0.0;
+	double kp = 0.0;
+
+	for (i = 0; i < N; i++) {
+
+		interface_k(i, ww[i], ee[i], nn[i], ss[i], k, kp, kw, ke, kn, ks);
+
+		ae[i] = (2 * ke * kp) / (dx * (ke * dx + kp * dx));
+		aw[i] = (2 * kw * kp) / (dx * (kw * dx + kp * dx));
+		an[i] = (2 * kn * kp) / (dy * (kn * dy + kp * dy));
+		as[i] = (2 * ks * kp) / (dy * (ks * dy + kp * dy));
+		s[i] = 0.0;
+		sp[i] = 0.0;
+
+		x = (int)i / Ny;
+		y = (int)i - x * Ny;
+
+		// Boundary conditions - West
+		if (x == 0) {
+
+			aw[i] = 0;
+
+		}
+
+		// Boundary conditions - East
+		if (x == Nx - 1) {
+
+			ae[i] = 0;
+			sp[i] = -(2 * k[i]) / (dx * dx);
+			s[i] = ((2 * k[i]) / (dx * dx)) * Te;
+
+		}
+
+		// Boundary conditions - North
+		if (y == Ny - 1) {
+
+			an[i] = 0;
+
+		}
+
+		// Boundary conditions - South
+		if (y == 0) {
+
+			as[i] = 0;
+
+		}
+
+		//Calculo do ap e do b
+		ap[i] = aw[i] + ae[i] + an[i] + as[i] + ((rhocp) / dt) - sp[i];
+		b[i] = s[i] + ((rhocp) / dt) * Ti[i] - (((rhocp / 2) * L * (f[i] - fi[i])) / dt);
+
+		printf("CV = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", i, aw[i], ae[i], an[i], as[i], ap[i], b[i]);//printf("CV = %i\t kw = %.2f\t ke = %.2f\t kn = %.2f\t ks = %.2f\t kp = %.2f\n", i, kw, ke, kn, ks, k[i]);
+
+	}
+}
+
+void SOR(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti) {
+
+	int i, it = 0;
+	double R = 0.0;
+	double res = 1.0;
+	double kappa = 1000;
+	double resmax = 1E-6;
+
+	while (res > resmax) {
+
+		res = 0.0;
+
+		for (i = 0; i < N; i++) {
+
+			Ti[i] = T[i];
+			R = b[i] + aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
+			T[i] = (T[i] + kappa * (R / ap[i])) / (1 + kappa);
+
+			res = res + pow((Ti[i] - T[i]), 2);
+
+		}
+
+		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
+		it++;
+	}
+
+}
+
+void plots(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* T) {
 
 	int i, j, o;
 	double rx{}, ry{};
@@ -236,170 +396,47 @@ void plot_regions(int Nx, int Ny, double dx, double dy, char ffn[20], int* R, do
 
 }
 
-void assembly(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
-	double cp, double L, double* T, double* Ti, double* b, double dt)
-{
-	int ow, oe, on, os;
-	int i, j, o;
-	double rho = 0.0;
-	double rhoi = 0.0;
-	double kp = 0.0;
-	double kw = 0.0;
-	double ke = 0.0;
-	double kn = 0.0;
-	double ks = 0.0;
-	int f = 0;
-	int fi = 0;
+void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks) {
 
-
-	for (i = 0; i < Nx; i++)
-		for (j = 0; j < Ny; j++) {
-
-			o = (i * Ny) + j;
-			ow = ((i - 1) * Ny) + j; // Id - West neighbor
-			oe = ((i + 1) * Ny) + j; // Id - East neighbor
-			on = (i * Ny) + (j + 1); // Id - North neighbor
-			os = (i * Ny) + (j - 1); // Id - South neighbor
-
-			find_k(dx, dy, R, o, ow, oe, on, os, kp, kw, ke, kn, ks);
-			find_rho(o, rho, rhoi, T, Ti);
-			find_f(o, f, fi, T, Ti);
-
-			if (R[o] == 1) {
-
-				s[o] = 50000;
-			}
-			else {
-
-				s[o] = 0;
-
-			}
-
-			ae[o] = (2 * ke * kp) / (dx * (ke * dx + kp * dx));
-			aw[o] = (2 * kw * kp) / (dx * (kw * dx + kp * dx));
-			an[o] = (2 * kn * kp) / (dy * (kn * dy + kp * dy));
-			as[o] = (2 * ks * kp) / (dy * (ks * dy + ks * dy));
-
-			//Condição de contorno - Face norte
-			if (j == Ny - 1) {
-
-				an[o] = 0;
-
-			}
-
-			//Condição de contorno - Face sul
-			if (j == 0) {
-
-				as[o] = 0;
-
-			}
-
-			//Condição de contorno - Face leste
-			if (i == Nx - 1) {
-
-				ae[o] = 0;
-
-			}
-
-			//Condição de contorno - Face oeste
-			if (i == 0) {
-
-				aw[o] = 0;
-				s[o] = s[o] + 2 * (kw / dy) * dy * 100;
-
-			}
-
-			//Calculo do ap e do b
-			ap[o] = aw[o] + ae[o] + an[o] + as[o] + s[o] + ((rho * cp) / dt) + (cp * (rho - rhoi)) / dt;
-			b[o] = s[o] + ((rho * cp) / dt) * T[o] - (rho * L * (f - fi)) / dt - (f * L * (rho - rhoi)) / dt;
-
-			//printf("CV = %i\t kn = %5.1E\t ks = %5.1E\t kw = %5.1E\t ke = %5.1E\t kp = %5.1E\t Region = %i\n", o, kn, ks, kw, ke, kp, R[o]);
-			//printf("CV = %i\t f = %i\t fi = %i\t rho = %5.1E\t rhoi = %5.1E\t Region = %i\n", o, f, fi, rho, rhoi, R[o]);
-			//printf("CV = %i\t an = %5.1E\t as = %5.1E\t aw = %5.1E\t ae = %5.1E\t ap = %5.1E\t b = %5.1E\n", o, an[o], as[o], aw[o], ae[o], ap[o], b[o]);
-
-		}
-}
-
-void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]) {
-
-	int i, j, o;
-	double rx, ry;
-
-	FILE* PFL;
-
-	PFL = fopen(ffn, "w");
-
-	fprintf(PFL, "title = \"tentativa_1\" \n");
-	fprintf(PFL, "variables = ");
-	fprintf(PFL, "\"x\" \"y\" \"T\"");
-	fprintf(PFL, "\nzone i = %i j = %i  T = \"point\" \n", Ny, Nx);
-
-	for (i = 1; i < Nx; i++)
-		for (j = 1; j < Ny; j++) {
-
-			o = i * Ny + j;
-			rx = i * dx + 0.5 * dx;
-			ry = j * dy + 0.5 * dy;
-
-			fprintf(PFL, " %13.5E %13.5E %i", rx, ry, R[o]);
-
-
-			fprintf(PFL, " \n");
-
-		}
-	fprintf(PFL, " \n");
-	fclose(PFL);
+	kp = k[p];
+	kw = (k[p] + k[w]) / 2;
+	ke = (k[p] + k[e]) / 2;
+	kn = (k[p] + k[n]) / 2;
+	ks = (k[p] + k[s]) / 2;
 
 }
 
-void SOR(int Nx, int Ny, double dx, double dy, int* R, double* ap, double* ae, double* aw, double* an, double* as, double* s,
-	double k_bat, double k_pcm, double rho_pcm_solid, double rho_pcm_liquid, double cp, double L, double* T, double* Ti, double Tmelt,
-	double* b, double dt, int* f, int* fi, double* fres) {
+void ft(int N, double* T, double*& f, double*& fi) {
 
-	int i, j, o, ow, oe, on, os, N = 0;
-	double RR = 0.0;
-	double res = 1.0;
-	double kappa = 1000;
-	double resmax = 1E-6;
-	int it = 0;
+	int i;
 
-	printf("\nSolver SOR:\n");
+	for (i = 0; i < N; i++) {
 
-	while (res > resmax) {
+		fi[i] = f[i];
+		f[i] = 0;// 0.2 * T[i] - 5;
 
-		res = 0.0;
+		if (f[i] <= 0) {
 
-		for (i = 0; i < Nx; i++)
-			for (j = 0; j < Ny; j++) {
+			f[i] = 0;
 
-				o = (i * Ny) + j;
-				ow = ((i - 1) * Ny) + j;
-				oe = ((i + 1) * Ny) + j;
-				on = (i * Ny) + (j + 1);
-				os = (i * Ny) + (j - 1);
+		}
+		if (f[i] >= 1) {
 
-				Ti[o] = T[o];
-				RR = b[o] + aw[o] * T[ow] + ae[o] * T[oe] + as[o] * T[os] + an[o] * T[on];
-				T[o] = (T[o] + kappa * (RR / ap[o])) / (1 + kappa);
+			f[i] = 1;
 
-				res = res + pow((Ti[o] - T[o]), 2);
+		}
+	}
+}
 
-			}
+void kt(int N, double* T, double*& k, double*& ki) {
 
-		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
-		it++;
+	int i;
+
+	for (i = 0; i < N; i++) {
+
+		ki[i] = k[i];
+		k[i] = 10 + 0.01 * T[i];
+
 	}
 
-
-
-	for (i = 0; i < Nx; i++)
-		for (j = 0; j < Ny; j++) {
-
-			o = (i * Ny) + j;
-
-			find_f(o, f[o], fi[o], T, Ti);
-
-			fres[o] = fres[o] + abs(fi[o] - f[o]);
-
-		}
 }

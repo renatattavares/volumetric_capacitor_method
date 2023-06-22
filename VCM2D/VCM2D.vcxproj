@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{f19646ba-ee85-4c8d-b5a9-bfdbf20c2c2e}</ProjectGuid>
+    <ProjectGuid>{3c341d2f-dce2-480e-b999-7b939bf1aea0}</ProjectGuid>
     <RootNamespace>VCM2D</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -128,9 +128,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="VCM2D.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="VCM2D.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

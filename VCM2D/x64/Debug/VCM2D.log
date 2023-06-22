@@ -1,15 +1,5 @@
 ﻿  VCM2D.cpp
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(110,9): error C2374: 'dt': redefinition; multiple initialization
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(36,9): message : see declaration of 'dt'
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(111,9): error C2374: 'time': redefinition; multiple initialization
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(37,9): message : see declaration of 'time'
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(113,6): error C2374: 'i': redefinition; multiple initialization
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(40,6): message : see declaration of 'i'
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(125,50): error C2065: 'k_bat': undeclared identifier
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(125,57): error C2065: 'k_pcm': undeclared identifier
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(126,4): error C3861: 'kt': identifier not found
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(127,4): error C3861: 'ft': identifier not found
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(264,4): error C3861: 'find_k': identifier not found
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(265,4): error C3861: 'find_rho': identifier not found
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(266,4): error C3861: 'find_f': identifier not found
-C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(400,4): error C3861: 'find_f': identifier not found
+C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(28,7): warning C4101: 'ffn': unreferenced local variable
+C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(181,12): warning C4101: 'm': unreferenced local variable
+C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\VCM2D.cpp(235,9): warning C4101: 'j': unreferenced local variable
+  VCM2D.vcxproj -> C:\Users\renat\source\repos\volumetric_capacitor_method\VCM2D\x64\Debug\VCM2D.exe
