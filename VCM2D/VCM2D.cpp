@@ -6,30 +6,29 @@
 #include <time.h>
 
 using namespace std;
-
 #pragma warning(disable:4996)
 
-void ft(int N, double* T, double* f, double* fi);
-void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R);
-void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T);
+// ----------------------- FUNCTIONS DECLARATIONS -------------------------//
 void map(int Nx, int Ny, double D, double dx, double dy, double k_bat, double k_pcm, double rho_bat, double rho_pcm, double cp_bat, double cp_pcm, int* ww, int* ee, int* nn, int* ss, int* R, double* k, double* rho, double* cp);
-void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an, double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double L_pcm, double* f, double* fi, int* R, double dt);
+void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an, double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double L_pcm, double* f, double* fi, int* R, double Q, double dt);
 void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks);
-void SOR(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti);
-void plots(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp);
-//void output(int Nx, int Ny, double dx, double dy, int* R, char ffn[20]);
+void ft(int N, double Tmelt, double* T, double* f, double* fi, int* R);
+void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R);
+void plot_f(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* f, int it);
+void SORt(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti);
+void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T, int it);
+void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp);
+void average_temperature(int N, double* T);
 
 int main() {
 
-	// Output file info
-	char ffn[40];
-
 	// ---------------------------- DIMENSIONS ---------------------------//
-	// Mesh 
-	const int Nx = 25; // Volumes in x direction
-	const int Ny = 25; // Volumes in y direction 
-	double dx = 0.002; // CV dimension in x direction [m]
-	double dy = 0.002; // CV dimension in y direction [m]
+	const int Nx = 225;  // Volumes in x direction
+	const int Ny = 225;  // Volumes in y direction 
+	double Lx = 0.05;    // Mesh size in x direcition [m] 
+	double Ly = 0.05;    // Mesh size in x direcition [m] 
+	double dx = Lx / Nx; // CV dimension in x direction [m]
+	double dy = Ly / Ny; // CV dimension in y direction [m]
 	const int N = (int)Nx * Ny; // Total number of CVs
 
 	// Battery Cell
@@ -37,8 +36,9 @@ int main() {
 	double h = 0.065; // Battery cell height [m]
 
 	// ----------------- BOUNDARY AND INITIAL CONDITIONS ----------------//
-	// initial Condition
-	double Tinitial = 20.0;
+	// Initial Condition
+	double Tinitial = 20.0; // Temperature in time = 0s [°C]
+	double Q = 100000;
 
 	// Temperatures for boundary conditions
 	double Tn = 0.0; // North
@@ -53,19 +53,20 @@ int main() {
 	double qw = 0.0; // West
 
 	// ------------------------ PHYSICAL PROPERTIES ----------------------//
-	// Selected PCM: RT 18 HC [T_melt = 18°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/m³ (solid/liquid)]
+	// Option 1: RT 18 HC [T_melt = 18°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/m³ (solid/liquid)]
+	// Option 2: RT 21 HC [T_melt = 21°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/m³ (solid/liquid)]
 
-	double rho_bat = 880;
-	double rho_pcm = 770;
+	double rho_bat = 2939;
+	double rho_pcm = 825;   // Average value
 	double k_bat = 3.4;
 	double k_pcm = 0.2;
 	double cp_bat = 1280;
 	double cp_pcm = 2000;
-	double L_pcm = 250000;
-	double L_bat = 0.0; // Anular o termo de mudança de fase no assembly
-	
-	// ---------------------------------- --------------------------------//
-	// Allocating memory and cleaning any previously stored value
+	double L_pcm = 165000; // PCM latent heat of fusion [J/kg]
+	double L_bat = 0.0;    // Battery cell latent heat of fusion [J/kg] -> It doesn't melt!
+	double Tmelt = 21;     // PCM fusion temperature
+
+	// ----------------------- MEMORY ALLOCATION ------------------------//
 	double* kres = (double*)malloc((N) * sizeof(double));
 	double* fres = (double*)malloc((N) * sizeof(double));
 	double* rho = (double*)malloc((N) * sizeof(double));
@@ -87,9 +88,9 @@ int main() {
 
 	int* R = (int*)malloc((N) * sizeof(int));
 	int* ee = (int*)malloc((N) * sizeof(int));
-	int* ww = (int*)malloc((N) * sizeof(int));     
-	int* nn = (int*)malloc((N) * sizeof(int));     
-	int* ss = (int*)malloc((N) * sizeof(int));     
+	int* ww = (int*)malloc((N) * sizeof(int));
+	int* nn = (int*)malloc((N) * sizeof(int));
+	int* ss = (int*)malloc((N) * sizeof(int));
 
 	for (int i = 0; i < N; i++) {
 
@@ -114,34 +115,44 @@ int main() {
 		T[i] = 0.0;
 		b[i] = 0.0;
 		s[i] = 0.0;
-		T[i] = Tinitial;
+		T[i] = 0.0;
 		R[i] = 0;
 
 	}
 
+	// Miscellaneous
+	char ffn[40];
+	clock_t start, end;
+
 	// -------------------------- SIMULATION CODE ------------------------//
-	bool converged = false; // Property convergence indicator
-	double resmax = 0.1;	// Maximum property residue 
+	int i = 0;
+	int it = 0;
+	double C = 0.0;			// SOR property term
+	double Y = 0.0;			// SOR property term
 	double dt = 1;			// Time step [s] 
 	double time = dt;		// Current time step [s] 
-	double TotalTime = 120; // Total simulation time [s]
-	int i = 0;
+	double res = 1.0;		// Initializing residue
+	double kappa = 1000;    // Over relaxation factor
+	double MaxRes = 0.0;	//
+	double resmax = 0.3;	// Maximum property residue 
+	bool converged = false; // Property convergence indicator
+	double TotalTime = 600; // Total simulation time [s]
+	
+	start = clock(); // Start timer!
 
+	// Initialization
 	map(Nx, Ny, D, dx, dy, k_bat, k_pcm, rho_bat, rho_pcm, cp_bat, cp_pcm, ww, ee, nn, ss, R, k, rho, cp);
-	assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, dt);
-	
-	/*
-	SOR(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-	
-	printf("\n// ----- Solution for time = %f ----- //\n", time);
+	//plot_properties(N, Nx, Ny, dx, dy, ffn, R, Ti, ki, rho, cp);
 
-	for (i = 0; i < N; i++) {
+	for (int i = 0; i < N; i++) {
 
-		printf("T%i = %f\n", i, T[i]);
+		T[i] = Ti[i];
+		f[i] = fi[i];
 
 	}
-	*/
 
+	//plot_temperature(N, Nx, Ny, dx, dy, ffn, T, -1);
+	//plot_f(N, Nx, Ny, dx, dy, ffn, f, -1);
 	
 	while (time <= TotalTime) {
 
@@ -149,46 +160,100 @@ int main() {
 
 		while (converged == false) {
 
-			assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, dt);
-			SOR(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-			kt(N, T, k_bat, k_pcm, k, ki, R);
-			ft(N, T, f, fi);
+			assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, Q, dt);
+			SORt(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
 
 			converged = true;
+			res = 0.0;
 
 			for (i = 0; i < N; i++) {
 
-				kres[i] = abs(k[i] - ki[i]);
-				fres[i] = abs(f[i] - fi[i]);
-				//printf("CV = %i\t f = %f\t Residuo = %13.5E\n", i, f[i], fres[i]);
+				if (R[i] == 1) {
 
-				if ((kres[i] > resmax) or (fres[i] > resmax)) {
+					f[i] = 0.0;
+					res = res;
+					//printf("CV = %i\t fi = %f\t f = %f\t res = %f\n", i, fi[i], f[i], res);
+					continue;
+
+				}
+
+				Y = aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
+				C = b[i] + (rho[i] * L_pcm * fi[i]) / dt;
+
+				f[i] = (fi[i] + kappa * (dt / (rho[i] * L_pcm)) * (ap[i] * Tmelt - Y - C)) / (1 + kappa);
+				//f[i] = (fi[i] + kappa * (dt / (rho[i] * L)) * (Y + C - (ap[i] * Tmelt))) / (1 + kappa);
+
+				//res = res + pow((fi[i] - f[i]), 2);
+				if (T[i] >= Tmelt) {
+					
+					res = abs(fi[i] - f[i]);
+
+				}
+				else {
+
+					res = 0;
+				
+				}
+				
+				if (res > resmax) {
 
 					converged = false;
 
 				}
+
+				if (res > MaxRes) {
+
+					MaxRes = res;
+
+				}
 			}
+
+			//printf("CV = %i\t S = %f\t C = %f\n", i, S, C);
+			//printf("CV = %i\t fi = %f\t f = %f\t res = %f\n", i, fi[i], f[i], res);
+			//printf("%f\n", kappa * (dt / (rho[i] * L)) * (Y + C - (ap[i] * Tmelt)));
+
+			ft(N, Tmelt, T, f, fi, R);
 
 			if (converged == true) {
 
-				printf("\n// ----- Solution for time = %f ----- //\n", time);
+				//printf("\n// ----- Solution for time = %f ----- //\n", time);
 
-				for (i = 0; i < N; i++) {
+				/*for (i = 0; i < N; i++) {
 
-					printf("T%i = %f\n", i, T[i]);
+					printf("CV = %i\t T = %f\t f = %f\t R = %i\n", i, T[i], f[i], R[i]);
 
-				}
+				}*/
 
 				time = time + dt;
+				int x = int(time);
+
+				//if ((x % 30) == 0) { // Print temperature and liquid fraction each 30 s (simulation time)
+				//	
+				//	plot_temperature(N, Nx, Ny, dx, dy, ffn, T, it);
+				//	plot_f(N, Nx, Ny, dx, dy, ffn, f, it);
+
+				//}
+				it++;
+
+			}
+			else {
+
+				printf("\nMaximum Residue = %f\n", MaxRes);
 
 			}
 		}
 	}
-	
-	plot_temperature(N, Nx, Ny, dx, dy, ffn, T);
-	// plots(N, Nx, Ny, dx, dy, ffn, R, Ti, ki, rho, cp);
 
+	end = clock(); // Stop timer!
+
+	// -------------------------------------------------------------------//
+	double time_taken = double(end - start) / double(CLOCKS_PER_SEC);
+	cout << "\nTime taken by program is : " << time_taken << " s " << endl;
+	// -------------------------------------------------------------------//
+
+	average_temperature(N, T);
 	return 0;
+
 }
 
 void map(int Nx, int Ny, double D, double dx, double dy, double k_bat, double k_pcm, double rho_bat, double rho_pcm, double cp_bat, double cp_pcm, 
@@ -254,7 +319,7 @@ void map(int Nx, int Ny, double D, double dx, double dy, double k_bat, double k_
 
 void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an,
 	double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti,
-	double* rho, double* cp, double L_pcm, double* f, double* fi, int* R, double dt) {
+	double* rho, double* cp, double L_pcm, double* f, double* fi, int* R, double Q, double dt) {
 
 	int o = 0;
 	int i, x, y;
@@ -306,7 +371,7 @@ void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int
 		//Boundary conditions - Source term
 		if (R[i] == 1) {
 
-			s[i] = 1000000;
+			s[i] = Q;
 			L = L_pcm;
 
 		}
@@ -315,13 +380,13 @@ void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int
 		ap[i] = aw[i] + ae[i] + an[i] + as[i] + ((rho[i] * cp[i]) / dt) - sp[i];
 		b[i] = s[i] + ((rho[i] * cp[i] * Ti[i]) / dt) - ((rho[i] * cp[i] * L * (f[i] - fi[i])) / dt);
 
-		//printf("CV = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", i, aw[i], ae[i], an[i], as[i], ap[i], b[i]);//printf("CV = %i\t kw = %.2f\t ke = %.2f\t kn = %.2f\t ks = %.2f\t kp = %.2f\n", i, kw, ke, kn, ks, k[i]);
+		//printf("CV = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", i, aw[i], ae[i], an[i], as[i], ap[i], b[i]);
 		//printf("CV = %i\t kw = %5.1E\t ke = %5.1E\t kn = %5.1E\t ks = %5.1E\t kp = %5.1E\n", i, kw, ke, kn, ks, kp);
 
 	}
 }
 
-void SOR(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti) {
+void SORt(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti) {
 
 	int i, it = 0;
 	double R = 0.0;
@@ -343,24 +408,84 @@ void SOR(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, doub
 
 		}
 
-		printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
+		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
 		it++;
 	}
 
 }
 
-void plots(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp) {
+void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks) {
+
+	kp = k[p];
+	kw = (k[p] + k[w]) / 2;
+	ke = (k[p] + k[e]) / 2;
+	kn = (k[p] + k[n]) / 2;
+	ks = (k[p] + k[s]) / 2;
+
+}
+
+void ft(int N, double Tmelt, double* T, double* f, double* fi, int* R) {
+
+	int i;
+
+	//printf("\n//------------ Evaluating f ------------//\n");
+
+	for (i = 0; i < N; i++) {
+
+		if (R[i] == 0) {
+		
+			f[i] = 0.5 * T[i] - 10.5;
+			
+			if (f[i] < 0) {
+
+				f[i] = 0;
+
+			}
+			
+			if (f[i] >= 1) {
+
+				f[i] = 1;
+
+			}
+		}
+	}
+}
+
+void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R) {
+
+	int i;
+
+	for (i = 0; i < N; i++) {
+
+		ki[i] = k[i];
+
+		if (R[i] == 1) {
+
+			k[i] = k_bat;
+
+		}
+		else {
+
+			k[i] = k_pcm;
+
+		}
+	}
+}
+
+void plot_f(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* f, int it) {
 
 	double rx{}, ry{};
-	
+
 	cout << "\n_________________________________________________________________________" << endl;
-	cout << "\nWriting data files..." << endl;
+	cout << "\nWriting temperature file..." << endl;
 
 	// Build
 	ofstream fout;
-	fout.open("SimulationPlots.vtk");
+	string iteration = to_string(it + 1);
+	string filename = "C:/Users/renat/source/repos/volumetric_capacitor_method/VCM2D/LiquidFraction/LiquidFraction_" + iteration + ".vtk";
+	fout.open(filename);
 	fout << "# vtk DataFile Version 2.0" << endl;
-	fout << "Temperature °C plot" << endl;
+	fout << "Liquid Fraction Mass plot" << endl;
 	fout << "ASCII" << endl;
 	fout << endl;
 	fout << "DATASET RECTILINEAR_GRID" << endl;
@@ -397,52 +522,12 @@ void plots(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, do
 	fout << "POINT_DATA " << Nx * Ny << endl;
 
 	// Write Region Information
-	fout << "SCALARS Region int" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++){
-
-		fout << R[o] << endl;
-
-	}
-	
-	// Write Initial Temperature Information
-	fout << "SCALARS Temperature float" << endl;
+	fout << "SCALARS Liquid_Fraction float" << endl;
 	fout << "LOOKUP_TABLE my_table" << endl;
 
 	for (int o = 0; o < N; o++) {
 
-		fout << Ti[o] << endl;
-
-	}
-
-	// Write Conductivity Information
-	fout << "SCALARS k float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++) {
-
-		fout << ki[o] << endl;
-
-	}
-
-	// Write Density Information
-	fout << "SCALARS Density float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++) {
-
-		fout << rho[o] << endl;
-
-	}
-
-	// Write Specific Heat Information
-	fout << "SCALARS cp float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++) {
-
-		fout << cp[o] << endl;
+		fout << f[o] << endl;
 
 	}
 
@@ -453,60 +538,7 @@ void plots(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, do
 
 }
 
-void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks) {
-
-	kp = k[p];
-	kw = (k[p] + k[w]) / 2;
-	ke = (k[p] + k[e]) / 2;
-	kn = (k[p] + k[n]) / 2;
-	ks = (k[p] + k[s]) / 2;
-
-}
-
-void ft(int N, double* T, double* f, double* fi) {
-
-	int i;
-
-	for (i = 0; i < N; i++) {
-
-		fi[i] = f[i];
-		f[i] = 0;// 0.2 * T[i] - 5;
-
-		if (f[i] <= 0) {
-
-			f[i] = 0;
-
-		}
-		if (f[i] >= 1) {
-
-			f[i] = 1;
-
-		}
-	}
-}
-
-void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R) {
-
-	int i;
-
-	for (i = 0; i < N; i++) {
-
-		ki[i] = k[i];
-
-		if (R[i] == 1) {
-
-			k[i] = k_bat;
-
-		}
-		else {
-
-			k[i] = k_pcm;
-
-		}
-	}
-}
-
-void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T) {
+void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T, int it) {
 
 	double rx{}, ry{};
 
@@ -515,7 +547,9 @@ void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20],
 
 	// Build
 	ofstream fout;
-	fout.open("FinalTemp.vtk");
+	string iteration = to_string(it + 1);
+	string filename = "C:/Users/renat/source/repos/volumetric_capacitor_method/VCM2D/Temperature/Temperature_" + iteration + ".vtk";
+	fout.open(filename);
 	fout << "# vtk DataFile Version 2.0" << endl;
 	fout << "Temperature °C plot" << endl;
 	fout << "ASCII" << endl;
@@ -567,5 +601,113 @@ void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20],
 	fout.close();
 	cout << "\nDone." << endl;
 	cout << "_________________________________________________________________________" << endl << endl;
+
+}
+
+void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp) {
+
+	double rx{}, ry{};
+
+	cout << "\n_________________________________________________________________________" << endl;
+	cout << "\nWriting data files..." << endl;
+
+	// Build
+	ofstream fout;
+	fout.open("SimulationPlots.vtk");
+	fout << "# vtk DataFile Version 2.0" << endl;
+	fout << "Physical Properties plot" << endl;
+	fout << "ASCII" << endl;
+	fout << endl;
+	fout << "DATASET RECTILINEAR_GRID" << endl;
+	fout << "DIMENSIONS " << Ny << " " << Nx << " 1" << endl;
+	fout << endl;
+	fout << "Y_COORDINATES " << Nx << " float" << endl;
+
+
+	for (int i = 0; i < Nx; i++)
+	{
+
+		rx = i * dx + 0.5 * dx;
+		fout << rx << " ";
+
+	}
+
+	fout << endl;
+	fout << endl;
+	fout << "X_COORDINATES " << Ny << " float" << endl;
+
+	for (int j = 0; j < Ny; j++)
+	{
+
+		ry = j * dy + 0.5 * dy;
+		fout << ry << " ";
+
+	}
+
+	fout << endl;
+	fout << endl;
+	fout << "Z_COORDINATES 1 float" << endl;
+	fout << "0" << endl;
+	fout << endl;
+	fout << "POINT_DATA " << Nx * Ny << endl;
+
+	// Write Region Information
+	fout << "SCALARS Region int" << endl;
+	fout << "LOOKUP_TABLE my_table" << endl;
+
+	for (int o = 0; o < N; o++) {
+
+		fout << R[o] << endl;
+
+	}
+
+	// Write Conductivity Information
+	fout << "SCALARS Thermal_Conductivity float" << endl;
+	fout << "LOOKUP_TABLE my_table" << endl;
+
+	for (int o = 0; o < N; o++) {
+
+		fout << ki[o] << endl;
+
+	}
+
+	// Write Density Information
+	fout << "SCALARS Density float" << endl;
+	fout << "LOOKUP_TABLE my_table" << endl;
+
+	for (int o = 0; o < N; o++) {
+
+		fout << rho[o] << endl;
+
+	}
+
+	// Write Specific Heat Information
+	fout << "SCALARS Specific_Heat float" << endl;
+	fout << "LOOKUP_TABLE my_table" << endl;
+
+	for (int o = 0; o < N; o++) {
+
+		fout << cp[o] << endl;
+
+	}
+
+	// Exit
+	fout.close();
+	cout << "\nDone." << endl;
+	cout << "_________________________________________________________________________" << endl << endl;
+
+}
+
+void average_temperature(int N, double* T) {
+
+	double total = 0.0;
+
+	for (int i = 0; i < N; i++) {
+
+		total = total + T[i];
+
+	}
+
+	printf("Temperature average = %f", total / N);
 
 }
