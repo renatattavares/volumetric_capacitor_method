@@ -23,8 +23,8 @@ void average_temperature(int N, double* T);
 int main() {
 
 	// ---------------------------- DIMENSIONS ---------------------------//
-	const int Nx = 225;  // Volumes in x direction
-	const int Ny = 225;  // Volumes in y direction 
+	const int Nx = 200;  // Volumes in x direction
+	const int Ny = 200;  // Volumes in y direction 
 	double Lx = 0.05;    // Mesh size in x direcition [m] 
 	double Ly = 0.05;    // Mesh size in x direcition [m] 
 	double dx = Lx / Nx; // CV dimension in x direction [m]
@@ -62,9 +62,9 @@ int main() {
 	double k_pcm = 0.2;
 	double cp_bat = 1280;
 	double cp_pcm = 2000;
-	double L_pcm = 165000; // PCM latent heat of fusion [J/kg]
+	double L_pcm = 190000; // PCM latent heat of fusion [J/kg]
 	double L_bat = 0.0;    // Battery cell latent heat of fusion [J/kg] -> It doesn't melt!
-	double Tmelt = 21;     // PCM fusion temperature
+	double Tmelt = 22;     // PCM fusion temperature
 
 	// ----------------------- MEMORY ALLOCATION ------------------------//
 	double* kres = (double*)malloc((N) * sizeof(double));
@@ -134,15 +134,15 @@ int main() {
 	double res = 1.0;		// Initializing residue
 	double kappa = 1000;    // Over relaxation factor
 	double MaxRes = 0.0;	//
-	double resmax = 0.3;	// Maximum property residue 
+	double resmax = 0.1;	// Maximum property residue 
 	bool converged = false; // Property convergence indicator
-	double TotalTime = 600; // Total simulation time [s]
+	double TotalTime = 1; // Total simulation time [s]
 	
 	start = clock(); // Start timer!
 
 	// Initialization
 	map(Nx, Ny, D, dx, dy, k_bat, k_pcm, rho_bat, rho_pcm, cp_bat, cp_pcm, ww, ee, nn, ss, R, k, rho, cp);
-	//plot_properties(N, Nx, Ny, dx, dy, ffn, R, Ti, ki, rho, cp);
+	plot_properties(N, Nx, Ny, dx, dy, ffn, R, Ti, k, rho, cp);
 
 	for (int i = 0; i < N; i++) {
 
@@ -216,7 +216,7 @@ int main() {
 
 			if (converged == true) {
 
-				//printf("\n// ----- Solution for time = %f ----- //\n", time);
+				printf("\n// ----- Solution for time = %f ----- //\n", time);
 
 				/*for (i = 0; i < N; i++) {
 
@@ -604,7 +604,7 @@ void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20],
 
 }
 
-void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp) {
+void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* k, double* rho, double* cp) {
 
 	double rx{}, ry{};
 
@@ -667,7 +667,7 @@ void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], 
 
 	for (int o = 0; o < N; o++) {
 
-		fout << ki[o] << endl;
+		fout << k[o] << endl;
 
 	}
 
