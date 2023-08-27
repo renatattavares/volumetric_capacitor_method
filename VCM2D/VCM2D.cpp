@@ -26,7 +26,7 @@ int main() {
 	const int Nx = 200;  // Volumes in x direction
 	const int Ny = 200;  // Volumes in y direction 
 	double Lx = 0.05;    // Mesh size in x direcition [m] 
-	double Ly = 0.05;    // Mesh size in x direcition [m] 
+	double Ly = 0.05;    // Mesh size in y direcition [m] 
 	double dx = Lx / Nx; // CV dimension in x direction [m]
 	double dy = Ly / Ny; // CV dimension in y direction [m]
 	const int N = (int)Nx * Ny; // Total number of CVs
@@ -38,7 +38,7 @@ int main() {
 	// ----------------- BOUNDARY AND INITIAL CONDITIONS ----------------//
 	// Initial Condition
 	double Tinitial = 20.0; // Temperature in time = 0s [°C]
-	double Q = 100000;
+	double Q = 340074.6;
 
 	// Temperatures for boundary conditions
 	double Tn = 0.0; // North
@@ -133,10 +133,8 @@ int main() {
 	double time = dt;		// Current time step [s] 
 	double res = 1.0;		// Initializing residue
 	double kappa = 1000;    // Over relaxation factor
-	double MaxRes = 0.0;	//
-	double resmax = 0.1;	// Maximum property residue 
-	bool converged = false; // Property convergence indicator
-	double TotalTime = 1; // Total simulation time [s]
+	double resmax = 1E-3;	// Maximum property residue 
+	double TotalTime = 600; // Total simulation time [s]
 	
 	start = clock(); // Start timer!
 
@@ -144,7 +142,7 @@ int main() {
 	map(Nx, Ny, D, dx, dy, k_bat, k_pcm, rho_bat, rho_pcm, cp_bat, cp_pcm, ww, ee, nn, ss, R, k, rho, cp);
 	plot_properties(N, Nx, Ny, dx, dy, ffn, R, Ti, k, rho, cp);
 
-	for (int i = 0; i < N; i++) {
+	/*for (int i = 0; i < N; i++) {
 
 		T[i] = Ti[i];
 		f[i] = fi[i];
@@ -153,17 +151,14 @@ int main() {
 
 	//plot_temperature(N, Nx, Ny, dx, dy, ffn, T, -1);
 	//plot_f(N, Nx, Ny, dx, dy, ffn, f, -1);
-	
+	*/
+
 	while (time <= TotalTime) {
 
-		converged = false;
+		printf("// -------------------- Time Step = %5.1fs -------------------- // \n", time);
 
-		while (converged == false) {
+		while (res > resmax) {
 
-			assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, Q, dt);
-			SORt(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-
-			converged = true;
 			res = 0.0;
 
 			for (i = 0; i < N; i++) {
@@ -171,77 +166,41 @@ int main() {
 				if (R[i] == 1) {
 
 					f[i] = 0.0;
-					res = res;
-					//printf("CV = %i\t fi = %f\t f = %f\t res = %f\n", i, fi[i], f[i], res);
+					res = 0.0;
+					//printf("Iteracao = %i\t Region = %i \t Residuo = %5.1E\n", it, R[i], res);
 					continue;
 
 				}
 
+				fi[i] = f[i];
 				Y = aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
 				C = b[i] + (rho[i] * L_pcm * fi[i]) / dt;
-
 				f[i] = (fi[i] + kappa * (dt / (rho[i] * L_pcm)) * (ap[i] * Tmelt - Y - C)) / (1 + kappa);
-				//f[i] = (fi[i] + kappa * (dt / (rho[i] * L)) * (Y + C - (ap[i] * Tmelt))) / (1 + kappa);
 
-				//res = res + pow((fi[i] - f[i]), 2);
-				if (T[i] >= Tmelt) {
-					
-					res = abs(fi[i] - f[i]);
-
-				}
-				else {
-
-					res = 0;
-				
-				}
-				
-				if (res > resmax) {
-
-					converged = false;
-
-				}
-
-				if (res > MaxRes) {
-
-					MaxRes = res;
-
-				}
-			}
-
-			//printf("CV = %i\t S = %f\t C = %f\n", i, S, C);
-			//printf("CV = %i\t fi = %f\t f = %f\t res = %f\n", i, fi[i], f[i], res);
-			//printf("%f\n", kappa * (dt / (rho[i] * L)) * (Y + C - (ap[i] * Tmelt)));
-
-			ft(N, Tmelt, T, f, fi, R);
-
-			if (converged == true) {
-
-				printf("\n// ----- Solution for time = %f ----- //\n", time);
-
-				/*for (i = 0; i < N; i++) {
-
-					printf("CV = %i\t T = %f\t f = %f\t R = %i\n", i, T[i], f[i], R[i]);
-
-				}*/
-
-				time = time + dt;
-				int x = int(time);
-
-				//if ((x % 30) == 0) { // Print temperature and liquid fraction each 30 s (simulation time)
-				//	
-				//	plot_temperature(N, Nx, Ny, dx, dy, ffn, T, it);
-				//	plot_f(N, Nx, Ny, dx, dy, ffn, f, it);
-
-				//}
-				it++;
+				res = abs(fi[i] - f[i]);
+				//printf("Iteracao = %i\t Region = %i \t Residuo = %5.1E\n", it, R[i], res);
 
 			}
-			else {
 
-				printf("\nMaximum Residue = %f\n", MaxRes);
+			it++;
 
-			}
 		}
+		
+		assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, Q, dt);
+		SORt(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+		ft(N, Tmelt, T, f, fi, R);
+
+		time = time + dt;
+		res = 1.0;
+		it = 0;
+		
+		if ((int(time) % 30) == 0) { // Print temperature and liquid fraction each 30 s (simulation time)
+
+			plot_temperature(N, Nx, Ny, dx, dy, ffn, T, time / dt);
+			plot_f(N, Nx, Ny, dx, dy, ffn, f, time / dt);
+
+		}
+				
 	}
 
 	end = clock(); // Stop timer!
