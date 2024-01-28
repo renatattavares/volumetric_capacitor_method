@@ -1,0 +1,45 @@
+#################### Mesh Info ####################
+
+# Number of elements
+Elements:
+    x: 200
+    y: 200
+
+# Length of mesh
+Length:
+    x: 0.05
+    y: 0.05
+
+################ Physical Properties ##############
+
+Battery:
+    rho: 2939  # Density
+    k: 3.4  # Thermal Conductivity
+    cp: 1200  # Specific heat
+
+PCM:
+    rho: 825
+    k: 0.2
+    cp: 2000
+    L: 190000
+    T_melt: 22
+
+########## Initial and Boundary Conditions ########
+
+# Initial condition
+Initial:
+    Temp: 20
+
+# Boundary conditions
+Boundary:
+    Temp: {north: 0, south: 0, east: 0, west: 0}  # Dirichlet
+    Flux: {north: 0, south: 0, east: 0, west: 0}  # Neumann
+
+############### Simulation Parameters #############
+
+Time_Step: 1
+Kappa: 1000
+ResMax: 1e-3
+Total_Time: 600
+
+
