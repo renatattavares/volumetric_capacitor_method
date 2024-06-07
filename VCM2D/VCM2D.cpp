@@ -4,6 +4,10 @@
 #include <fstream>
 #include <string>
 #include <time.h>
+#include <iomanip>
+#include <ctime>
+#include <sstream>
+#include <direct.h>
 
 using namespace std;
 #pragma warning(disable:4996)
@@ -13,18 +17,17 @@ void map(int Nx, int Ny, double D, double dx, double dy, double k_bat, double k_
 void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* k, double* ap, double* aw, double* ae, double* an, double* as, double* s, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double L_pcm, double* f, double* fi, int* R, double Q, double dt);
 void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks);
 void ft(int N, double Tmelt, double* T, double* f, double* fi, int* R);
-void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R);
-void plot_f(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* f, int it);
 void SORt(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti);
-void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T, int it);
-void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* ki, double* rho, double* cp);
 void average_temperature(int N, double* T);
+void plot(int N, int Nx, int Ny, double dx, double dy, double* T, int it, string dir, string property);
+void plot_properties(int N, int Nx, int Ny, double dx, double dy, int* R, double* k, double* rho, double* cp, int it, string dir);
+string create_results_folder(string base_folder);
 
 int main() {
 
 	// ---------------------------- DIMENSIONS ---------------------------//
-	const int Nx = 200;  // Volumes in x direction
-	const int Ny = 200;  // Volumes in y direction 
+	const int Nx = 100;  // Volumes in x direction
+	const int Ny = 100;  // Volumes in y direction 
 	double Lx = 0.05;    // Mesh size in x direcition [m] 
 	double Ly = 0.05;    // Mesh size in y direcition [m] 
 	double dx = Lx / Nx; // CV dimension in x direction [m]
@@ -38,7 +41,7 @@ int main() {
 	// ----------------- BOUNDARY AND INITIAL CONDITIONS ----------------//
 	// Initial Condition
 	double Tinitial = 20.0; // Temperature in time = 0s [°C]
-	double Q = 340074.6;
+	double Q = 300000;
 
 	// Temperatures for boundary conditions
 	double Tn = 0.0; // North
@@ -59,7 +62,7 @@ int main() {
 	double rho_bat = 2939;
 	double rho_pcm = 825;   // Average value
 	double k_bat = 3.4;
-	double k_pcm = 0.2;
+	double k_pcm = 5;//0.2;
 	double cp_bat = 1280;
 	double cp_pcm = 2000;
 	double L_pcm = 190000; // PCM latent heat of fusion [J/kg]
@@ -107,7 +110,7 @@ int main() {
 		ae[i] = 0.0;
 		an[i] = 0.0;
 		as[i] = 0.0;
-		Ti[i] = Tinitial;
+		Ti[i] = 0.0;
 		fi[i] = 0.0;
 		ki[i] = 0.0;
 		f[i] = 0.0;
@@ -115,94 +118,120 @@ int main() {
 		T[i] = 0.0;
 		b[i] = 0.0;
 		s[i] = 0.0;
-		T[i] = 0.0;
+		T[i] = Tinitial;
 		R[i] = 0;
 
 	}
+	
+	// ------------------------- MISCELLANEOUS --------------------------//
+	string results_folder = "C:/Users/renat/Documents/SVN/VCM-PCM/Results/Results_";
+	string folder = create_results_folder(results_folder);
 
-	// Miscellaneous
-	char ffn[40];
+	// Simulation timer
 	clock_t start, end;
-
+	
 	// -------------------------- SIMULATION CODE ------------------------//
+	int a = 0;
 	int i = 0;
 	int it = 0;
 	double C = 0.0;			// SOR property term
 	double Y = 0.0;			// SOR property term
-	double dt = 1;			// Time step [s] 
-	double time = dt;		// Current time step [s] 
+	double dt = 0.5;		// Time step [s] 
+	double time = 0.0;		// Current time step [s] 
 	double res = 1.0;		// Initializing residue
-	double kappa = 1000;    // Over relaxation factor
-	double resmax = 1E-3;	// Maximum property residue 
-	double TotalTime = 600; // Total simulation time [s]
-	
-	start = clock(); // Start timer!
+	double kappa = 10.0;	// Over relaxation factor
+	double resmax = 1E-4;	// Maximum property residue 
+	double TotalTime = 300; // Total simulation time [s]
 
+	// Start simulation!
+	start = clock();		// Start timer!
+	
 	// Initialization
 	map(Nx, Ny, D, dx, dy, k_bat, k_pcm, rho_bat, rho_pcm, cp_bat, cp_pcm, ww, ee, nn, ss, R, k, rho, cp);
-	plot_properties(N, Nx, Ny, dx, dy, ffn, R, Ti, k, rho, cp);
+	plot(N, Nx, Ny, dx, dy, T, time, folder, "Temp");
+	plot(N, Nx, Ny, dx, dy, f, time, folder, "Frac");
+	plot_properties(N, Nx, Ny, dx, dy, R, k, rho, cp, time, folder);
+	
+	// Copy previous time step data
+	for (int i = 0; i < N; i++) {
 
-	/*for (int i = 0; i < N; i++) {
-
-		T[i] = Ti[i];
-		f[i] = fi[i];
+		Ti[i] = T[i];
+		fi[i] = f[i];
 
 	}
 
-	//plot_temperature(N, Nx, Ny, dx, dy, ffn, T, -1);
-	//plot_f(N, Nx, Ny, dx, dy, ffn, f, -1);
-	*/
-
 	while (time <= TotalTime) {
 
-		printf("// -------------------- Time Step = %5.1fs -------------------- // \n", time);
+		printf("\n// -------------------- Time Step = %5.1fs -------------------- // \n", time);
+
+		assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, Q, dt);
+		SORt(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+		//ft(N, Tmelt, T, f, fi, R);
+
+		it = 0;
+		res = 1.0;
 
 		while (res > resmax) {
-
+			
+			a = 0;
 			res = 0.0;
 
 			for (i = 0; i < N; i++) {
 
-				if (R[i] == 1) {
+				if (R[i] == 0) {	// PCM region;
 
-					f[i] = 0.0;
-					res = 0.0;
-					//printf("Iteracao = %i\t Region = %i \t Residuo = %5.1E\n", it, R[i], res);
-					continue;
+					fi[i] = f[i];
+					Y = aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
+					C = b[i] + (rho[i] * L_pcm * fi[i]) / dt;
+					f[i] = (fi[i] + (kappa * dt / (rho[i] * L_pcm)) * (Y - ap[i] * Tmelt + C)) / (1 + kappa);
+
+					//printf("\n\nf = %5.1E\t fi = %5.1E\n", f[i], fi[i]);
+
+					// Impose physical limit
+					if (f[i] > 1.0)
+					{
+						f[i] = 1.0;
+					}
+					else if (f[i] < 0.0)
+					{
+						f[i] = 0.0;
+					}
+
+					res = res + fabs(f[i] - fi[i]);
+					if (fabs(f[i] - fi[i]) > resmax)
+					{
+						a++;
+					}
+
+					//printf("f = %5.1E\t fi = %5.1E\n\n", f[i], fi[i]);
 
 				}
-
-				fi[i] = f[i];
-				Y = aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
-				C = b[i] + (rho[i] * L_pcm * fi[i]) / dt;
-				f[i] = (fi[i] + kappa * (dt / (rho[i] * L_pcm)) * (ap[i] * Tmelt - Y - C)) / (1 + kappa);
-
-				res = abs(fi[i] - f[i]);
-				//printf("Iteracao = %i\t Region = %i \t Residuo = %5.1E\n", it, R[i], res);
+				else {
+					f[i] = 0.0;
+				}
 
 			}
 
+			if (a != 0) {
+				res = res / a;
+			}
+
 			it++;
+			//printf("Iteracao = %i\t Residuo = %5.1E\n", it, res);
+			//printf("Iteracao = %i\t Residuo = %5.1E\t Unconverged = %i\n", it, res, a);
+		}
+
+		if ((int(time) % 50) == 0) { // Print temperature and liquid fraction each 30 s (simulation time)
+
+			plot(N, Nx, Ny, dx, dy, T, time, folder, "Temp");
+			plot(N, Nx, Ny, dx, dy, f, time, folder, "Frac");
 
 		}
-		
-		assembly(N, Nx, Ny, dx, dy, ww, ee, nn, ss, k, ap, aw, ae, an, as, s, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, f, fi, R, Q, dt);
-		SORt(N, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-		ft(N, Tmelt, T, f, fi, R);
 
 		time = time + dt;
-		res = 1.0;
-		it = 0;
-		
-		if ((int(time) % 30) == 0) { // Print temperature and liquid fraction each 30 s (simulation time)
 
-			plot_temperature(N, Nx, Ny, dx, dy, ffn, T, time / dt);
-			plot_f(N, Nx, Ny, dx, dy, ffn, f, time / dt);
-
-		}
-				
 	}
-
+	
 	end = clock(); // Stop timer!
 
 	// -------------------------------------------------------------------//
@@ -347,30 +376,29 @@ void assembly(int N, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int
 
 void SORt(int N, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti) {
 
-	int i, it = 0;
-	double R = 0.0;
+	double R;
 	double res = 1.0;
-	double kappa = 1000;
 	double resmax = 1E-6;
+	double kappa = 1000;
+	int i, it = 0;
 
-	while (res > resmax) {
-
+	while (res > resmax) 
+	{
 		res = 0.0;
 
-		for (i = 0; i < N; i++) {
-
+		for (i = 0; i < N; i++) 
+		{
 			Ti[i] = T[i];
 			R = b[i] + aw[i] * T[ww[i]] + ae[i] * T[ee[i]] + an[i] * T[nn[i]] + as[i] * T[ss[i]];
-			T[i] = (T[i] + kappa * (R / ap[i])) / (1 + kappa);
+			T[i] = (Ti[i] + kappa * (R / ap[i])) / (1 + kappa);
 
-			res = res + pow((Ti[i] - T[i]), 2);
+			res = res + fabs(T[i] - Ti[i]);
 
 		}
-
-		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);
-		it++;
-	}
-
+		//res = res / N;
+		//it++;
+		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);			  
+	}									 
 }
 
 void interface_k(int p, int w, int e, int n, int s, double* k, double& kp, double& kw, double& ke, double& kn, double& ks) {
@@ -410,160 +438,7 @@ void ft(int N, double Tmelt, double* T, double* f, double* fi, int* R) {
 	}
 }
 
-void kt(int N, double* T, double k_bat, double k_pcm, double* k, double* ki, int* R) {
-
-	int i;
-
-	for (i = 0; i < N; i++) {
-
-		ki[i] = k[i];
-
-		if (R[i] == 1) {
-
-			k[i] = k_bat;
-
-		}
-		else {
-
-			k[i] = k_pcm;
-
-		}
-	}
-}
-
-void plot_f(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* f, int it) {
-
-	double rx{}, ry{};
-
-	cout << "\n_________________________________________________________________________" << endl;
-	cout << "\nWriting temperature file..." << endl;
-
-	// Build
-	ofstream fout;
-	string iteration = to_string(it + 1);
-	string filename = "C:/Users/renat/source/repos/volumetric_capacitor_method/VCM2D/LiquidFraction/LiquidFraction_" + iteration + ".vtk";
-	fout.open(filename);
-	fout << "# vtk DataFile Version 2.0" << endl;
-	fout << "Liquid Fraction Mass plot" << endl;
-	fout << "ASCII" << endl;
-	fout << endl;
-	fout << "DATASET RECTILINEAR_GRID" << endl;
-	fout << "DIMENSIONS " << Ny << " " << Nx << " 1" << endl;
-	fout << endl;
-	fout << "Y_COORDINATES " << Nx << " float" << endl;
-
-
-	for (int i = 0; i < Nx; i++)
-	{
-
-		rx = i * dx + 0.5 * dx;
-		fout << rx << " ";
-
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "X_COORDINATES " << Ny << " float" << endl;
-
-	for (int j = 0; j < Ny; j++)
-	{
-
-		ry = j * dy + 0.5 * dy;
-		fout << ry << " ";
-
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "Z_COORDINATES 1 float" << endl;
-	fout << "0" << endl;
-	fout << endl;
-	fout << "POINT_DATA " << Nx * Ny << endl;
-
-	// Write Region Information
-	fout << "SCALARS Liquid_Fraction float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++) {
-
-		fout << f[o] << endl;
-
-	}
-
-	// Exit
-	fout.close();
-	cout << "\nDone." << endl;
-	cout << "_________________________________________________________________________" << endl << endl;
-
-}
-
-void plot_temperature(int N, int Nx, int Ny, double dx, double dy, char ffn[20], double* T, int it) {
-
-	double rx{}, ry{};
-
-	cout << "\n_________________________________________________________________________" << endl;
-	cout << "\nWriting temperature file..." << endl;
-
-	// Build
-	ofstream fout;
-	string iteration = to_string(it + 1);
-	string filename = "C:/Users/renat/source/repos/volumetric_capacitor_method/VCM2D/Temperature/Temperature_" + iteration + ".vtk";
-	fout.open(filename);
-	fout << "# vtk DataFile Version 2.0" << endl;
-	fout << "Temperature °C plot" << endl;
-	fout << "ASCII" << endl;
-	fout << endl;
-	fout << "DATASET RECTILINEAR_GRID" << endl;
-	fout << "DIMENSIONS " << Ny << " " << Nx << " 1" << endl;
-	fout << endl;
-	fout << "Y_COORDINATES " << Nx << " float" << endl;
-
-
-	for (int i = 0; i < Nx; i++)
-	{
-
-		rx = i * dx + 0.5 * dx;
-		fout << rx << " ";
-
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "X_COORDINATES " << Ny << " float" << endl;
-
-	for (int j = 0; j < Ny; j++)
-	{
-
-		ry = j * dy + 0.5 * dy;
-		fout << ry << " ";
-
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "Z_COORDINATES 1 float" << endl;
-	fout << "0" << endl;
-	fout << endl;
-	fout << "POINT_DATA " << Nx * Ny << endl;
-
-	// Write Region Information
-	fout << "SCALARS Temperature float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int o = 0; o < N; o++) {
-
-		fout << T[o] << endl;
-
-	}
-
-	// Exit
-	fout.close();
-	cout << "\nDone." << endl;
-	cout << "_________________________________________________________________________" << endl << endl;
-
-}
-
-void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], int* R, double* Ti, double* k, double* rho, double* cp) {
+void plot_properties(int N, int Nx, int Ny, double dx, double dy, int* R, double* k, double* rho, double* cp, int it, string dir) {
 
 	double rx{}, ry{};
 
@@ -572,7 +447,8 @@ void plot_properties(int N, int Nx, int Ny, double dx, double dy, char ffn[20], 
 
 	// Build
 	ofstream fout;
-	fout.open("SimulationPlots.vtk");
+	string filename = dir + "/Properties.vtk";
+	fout.open(filename);
 	fout << "# vtk DataFile Version 2.0" << endl;
 	fout << "Physical Properties plot" << endl;
 	fout << "ASCII" << endl;
@@ -669,4 +545,110 @@ void average_temperature(int N, double* T) {
 
 	printf("Temperature average = %f", total / N);
 
+}
+
+void plot(int N, int Nx, int Ny, double dx, double dy, double* P, int it, string dir, string property) {
+
+	double rx{}, ry{};
+	ofstream fout;
+	string iteration = to_string(it + 1);
+	string filename;
+	string title;
+	string info;
+
+	// Identify property
+	if (property == "Temp"){
+		filename = dir + "/Temp/Temp_" + iteration + ".vtk";
+		title = "Temperature °C plot";
+		info = "SCALARS Temperature float";
+	} else if (property == "Frac") {
+		filename = dir + "/Frac/Frac_" + iteration + ".vtk";
+		title = "Liquid Fraction Mass plot";
+		info = "SCALARS Liquid_Fraction float";
+	} else {
+		return;
+	}
+		
+	cout << "\n_________________________________________________________________________" << endl;
+	cout << "\nWriting file..." << endl;
+
+	fout.open(filename);
+	fout << "# vtk DataFile Version 2.0" << endl;
+	fout << title << endl;
+	fout << "ASCII" << endl;
+	fout << endl;
+	fout << "DATASET RECTILINEAR_GRID" << endl;
+	fout << "DIMENSIONS " << Ny << " " << Nx << " 1" << endl;
+	fout << endl;
+	fout << "Y_COORDINATES " << Nx << " float" << endl;
+
+	for (int i = 0; i < Nx; i++)
+	{
+		rx = i * dx + 0.5 * dx;
+		fout << rx << " ";
+	}
+
+	fout << endl;
+	fout << endl;
+	fout << "X_COORDINATES " << Ny << " float" << endl;
+
+	for (int j = 0; j < Ny; j++)
+	{
+		ry = j * dy + 0.5 * dy;
+		fout << ry << " ";
+	}
+
+	fout << endl;
+	fout << endl;
+	fout << "Z_COORDINATES 1 float" << endl;
+	fout << "0" << endl;
+	fout << endl;
+	fout << "POINT_DATA " << Nx * Ny << endl;
+
+	// Write Region Information
+	fout << info << endl;
+	fout << "LOOKUP_TABLE my_table" << endl;
+
+	for (int o = 0; o < N; o++) {
+
+		fout << P[o] << endl;
+
+	}
+	
+	// Exit
+	fout.close();
+	cout << "\nDone." << endl;
+	cout << "_________________________________________________________________________" << endl << endl;
+
+	return;
+}
+
+string create_results_folder(string base_folder) {
+	// Get the current time
+	time_t t = time(nullptr);
+	tm* now = localtime(&t);
+
+	// Create a string stream to format the date and time
+	ostringstream oss;
+	oss << (now->tm_year + 1900) << '-'
+		<< setw(2) << setfill('0') << (now->tm_mon + 1) << '-'
+		<< setw(2) << setfill('0') << now->tm_mday << '_'
+		<< setw(2) << setfill('0') << now->tm_hour << '-'
+		<< setw(2) << setfill('0') << now->tm_min;
+
+	// The formatted date-time string
+	string dateTimeStr = oss.str();
+
+	// The folder string
+	string folder = base_folder + dateTimeStr;
+	string tfolder = folder + "/Temp";
+	string ffolder = folder + "/Frac";
+
+	if (_mkdir(folder.c_str()) != 0 || _mkdir(tfolder.c_str()) != 0 || _mkdir(ffolder.c_str()) != 0) {
+		cout << "Failed creating results folder..." << endl;
+		return folder;
+	}
+
+	return folder;
+		
 }
