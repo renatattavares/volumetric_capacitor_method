@@ -1,21 +1,26 @@
 %% Plot comparison - Proposed Case
 
-% Simulation Case
-sim = 3; % 1.REF-PCM / 2.REF-CPCM / 3.REF-DOUBLE / 4.3C-PCM / 5.3C-CPCM / 6.3C-DOUBLE
-
 % Save figure plots
 save = false;
 
 % Results folder
-results_folder = 'Results_2025_01_29_10_00_36';
-    
+PCM_results_folder = 'Results_2024-11-17_12-12_REV21_FullPCM_dx_0p5';
+CPCM_results_folder = 'Results_2024-11-20_10-57_REV21_FullCPCM_dx_1p0';
+DOUBLE_results_folder = 'Results_2024-11-16_11-41_REV21_0p5_resmax_10-4';
+
 %% Result files
 [filepath,~,~] = fileparts(mfilename('fullpath'));
-results_fullpath = [extractBefore(filepath, '\Validation') '\Results\' results_folder];
-opts = detectImportOptions([results_fullpath '\Log.dat']);
+PCM_results_fullpath = [extractBefore(filepath, '\Validation') '\Results\' PCM_results_folder];
+CPCM_results_fullpath = [extractBefore(filepath, '\Validation') '\Results\' CPCM_results_folder];
+DOUBLE_results_fullpath = [extractBefore(filepath, '\Validation') '\Results\' DOUBLE_results_folder];
+opts = detectImportOptions([PCM_results_fullpath '\Log.dat']);
 opts.VariableNames = ["Time", "Tmax","Tmin", "DeltaT", "F"];
-data = readtable([results_fullpath '\Log.dat'], opts);
-  
+
+PCM_data = readtable([PCM_results_fullpath '\Log.dat'], opts);
+CPCM_data = readtable([CPCM_results_fullpath '\Log.dat'], opts);
+DOUBLE_data = readtable([DOUBLE_results_fullpath '\Log.dat'], opts);
+
+%{
 % Reference Files
 switch sim
     case 1 % Reference - Pure PCM Pouch
@@ -44,7 +49,7 @@ switch sim
         time = 1250;
 end
 
-%{
+
  Create plots
 %close all
 % figure(1)
@@ -72,28 +77,14 @@ end
 % axis([0 Time 0 10]);
 %}
 
-%close all
-fig = figure(3);
-yy  = spline(tmax.time, tmax.tmax, xx) - spline(dt.time, dt.dt, xx);
-plot(xx, yy, 's')
-hold on
-plot(data.Time, data.Tmin, '-')
-grid on
-title('Minimum Temperature in Battery Module')
-xlabel('Time (s)')
-ylabel('Temperature (°C)')
-legend('Reference','Result', 'Location', 'northwest')
-axis([0 time 25 45]);
-if save
-    saveas(fig, [results_folder '_MinTemp.png'])
-end
-fig = figure(4);
+fig = figure(1);
 ax = axes;
 yyaxis left
-yy  = spline(tmax.time, tmax.tmax, xx);
-plot(xx, yy, 's')
+plot(PCM_data.Time, PCM_data.Tmax, 'Color', 'red', 'LineWidth', 1)
 hold on
-plot(data.Time, data.Tmax, '-')
+plot(CPCM_data.Time, CPCM_data.Tmax, '-', 'Color', 	"#EDB120", 'LineWidth', 1)
+hold on
+plot(DOUBLE_data.Time, DOUBLE_data.Tmax, '-', 'Color', "#77AC30", 'LineWidth', 1)
 grid on
 xlabel('Time (s)')
 ylabel('Temperature (°C)')
@@ -101,32 +92,16 @@ axis([0 time 25 45]);
 
 yyaxis right
 yy = spline(dt.time, dt.dt, xx);
-plot(xx, yy, 's')
+plot(PCM_data.Time, PCM_data.DeltaT, '--', 'Color', 'red', 'LineWidth', 1)
 hold on
-plot(data.Time, data.DeltaT, '-')
+plot(CPCM_data.Time, CPCM_data.DeltaT, '--', 'Color', 	"#EDB120", 'LineWidth', 1)
+hold on
+plot(DOUBLE_data.Time, DOUBLE_data.DeltaT, '--', 'Color', "#77AC30", 'LineWidth', 1)
 grid on
 ylabel('Temperature difference (°C)')
-legend('Max Temp - Reference','Max Temp - Result', '\DeltaTemp - Reference','\DeltaTemp - Result', 'Location', 'northwest')
+legend('PCM - Max Temp','CPCM - Max Temp', 'DOUBLE - Max Temp', 'PCM - \DeltaTemp','CPCM - \DeltaTemp', 'DOUBLE - \DeltaTemp', 'Location', 'northwest')
 axis([0 time 0 10]);
 if save
-    saveas(fig, [results_folder '_MaxTemp_DeltaTemp.png'])
+    saveas(fig, ['AllPouches_MaxTemp_DeltaTemp.png'])
 end
 
-% Set the color of each axis to black
-ax.YAxis(1).Color = [0 0 0];
-ax.YAxis(2).Color = [0 0 0];
-
-%% RMSE
-try
-    ref = spline(tmax.time, tmax.tmax, xx);
-    mine = spline(data.Time, data.Tmax, xx);
-    err = sqrt(sum((ref(:)-mine(:)).^2) / numel(ref));
-catch ME
-   %warning(ME.message) 
-end
-
-%ref = spline(tmax_ref.time, tmax_ref.Tmax, xx) - spline(deltat_ref.time, deltat_ref.DeltaT, xx);
-%mine = spline(data.Time, data.Tmin, xx);
-%err = sqrt(sum((ref(:)-mine(:)).^2) / numel(ref));
-
-%}

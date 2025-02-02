@@ -358,3 +358,30 @@ int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
 	}
 	return o;
 }
+
+void nonlinear_cond(int o, int* pp, int* R, double* f, double* kx, double* ky, double* resk)
+{
+	int j;
+	double res = 0.0, ka;
+	double a = 1.0;
+
+	for (int i = 0; i < o; i++)
+	{
+		if (pp[i] != 0 && (R[pp[i]] == 5 || R[pp[i]] == 0))
+		{
+			j = pp[i];
+			ka = kx[j];
+
+			kx[j] = 0.425 * (1 - f[j]) + 0.152 * f[j]; // Conductivity based on liquid fraction
+			ky[j] = kx[j];
+
+			res = res + fabs(kx[j] - ka);
+			if (fabs(kx[j] - ka) > 1.0E-05)
+			{
+				a++;
+			}
+		}
+	}
+
+	*resk = res / a;
+}

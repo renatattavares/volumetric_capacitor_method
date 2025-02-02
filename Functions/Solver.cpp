@@ -40,7 +40,7 @@ void SORf (int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, doubl
 	double res = 0.0;
 	double total_f = 0.0;
 	double kappa = 0.23;			// Under relaxation factor
-	double resmax = 1.0E-3;			// Maximum property residue 
+	double resmax = 1.0E-4;			// Maximum property residue 
 	double L, Y, C;
 	double f_old;
 

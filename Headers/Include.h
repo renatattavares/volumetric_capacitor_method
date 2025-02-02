@@ -40,6 +40,8 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 
 int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss);
 
+void nonlinear_cond(int o, int* pp, int* R, double* f, double* kx, double* ky, double* resk);
+
 void log(double time, int N, int* R, int* pp, double* T, double* f, string results_folder);
 
 void plot_res(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, int it, double time, string results_folder);

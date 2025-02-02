@@ -5,16 +5,16 @@ int main() {
 	// ---------------------- SIMULATION SETUP ------------------------- //
 	// Problem type
 	const int type = 3;				// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
-	const int solver = 1;			// SOR = 1 / SIP = 2
+	int pouch = 1;					// DOUBLE = 1 / PCM  = 2 / CPCM = 3
 
 	// Time Setup
 	double TotalTime = 500;			// Total simulation time [s]
-	double dt = 0.5;					// Time step [s]
+	double dt = 0.001;					// Time step [s]
 
 	// -------------------------- MESH SETUP --------------------------- //
 	// Control Volumes
-	double dx = 0.001;				// CV dimension in x direction[m]
-	double dy = 0.001;				// CV dimension in y direction[m]
+	double dx = 0.0005;				// CV dimension in x direction[m]
+	double dy = 0.0005;				// CV dimension in y direction[m]
 	int N, Nx, Ny;
 	double Lx, Ly;
 
@@ -88,6 +88,22 @@ int main() {
 	double cp_cpcm = porosity * cp_pcm + (1 - porosity) * cp_cop;
 	double L_cpcm = porosity * L_pcm;
 
+	if (pouch == 2) // Full PCM
+	{
+		porosity = 1;
+		double rho_cpcm = porosity * rho_pcm + (1 - porosity) * rho_cop;
+		double k_cpcm = porosity * k_pcm + (1 - porosity) * k_cop;
+		double cp_cpcm = porosity * cp_pcm + (1 - porosity) * cp_cop;
+		double L_cpcm = porosity * L_pcm;
+	}
+	else if (pouch = 3) // Full CPCM
+	{
+		rho_pcm = rho_cpcm;
+		k_pcm = k_cpcm;
+		cp_pcm = cp_cpcm;
+		L_pcm = L_cpcm;
+	}
+
 	// Cold Plate
 	double h_cp = 120;
 	double T_cp = 15;
@@ -155,8 +171,6 @@ int main() {
 	int it = 0;						// Iterations counter
 	int active = 0;					// Active liquid cooling
 	double time = 0.0;				// Current time step [s] 
-	double resf = 1.0;				// Initializing residue
-	double resmax = 1.0E-3;			// Maximum property residue 
 	int previous_time = 0;
 
 	// Simulation timer
@@ -171,8 +185,13 @@ int main() {
 	// Store initial mesh info
 	log(time, o, pp, R, T, f, results);
 	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, results);
-	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, time, results);
+	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
+
+	// Resíduos (SOR, liquid fraction and conductivity)
+	double resmax = 1.0E-4;
+	double resf = 1.0;
+	double resk = 1.0;
 
 	// Start simulation!
 	start = clock();		// Start timer!
@@ -194,28 +213,32 @@ int main() {
 				break;
 			}
 		}
-		
-		it = 0;
-		resf = 1.0;
 
-		while (resf > resmax) 
+		// Compute nonlinear conducticity
+		nonlinear_cond(o, pp, R, f, kx, ky, &resk);
+		
+		// Init residue and number of iterations
+		resf = 1.0;
+		resk = 1.0;
+		it = 0;
+
+		while (resf > resmax || resk > resmax)
 		{
+			// Coefficients matrix setup
 			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
 
-			if (solver == 1)
-			{
-				SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-			}
-			else
-			{
-				SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, time, results);
-			}
+			// Linear system solver
+			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+			//SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, time, results);	
 
-			//resf = 0.0;
+			// Compute liquid fraction
 			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, L_cpcm, Tmelt, &resf);
 
+			// Compute nonlinear conducticity
+			nonlinear_cond(o, pp, R, f, kx, ky, &resk);
+
 			it++;
-			printf("\nIteracao = %i\t Residuo = %5.1E\n", it, resf);
+			printf("\Iteration = %i\t resf = %5.1E\t resk = %5.1E\n", it, resf, resk);
 		}
 		
 		time = time + dt;
