@@ -1,20 +1,20 @@
  #include "Headers/Include.h"
-#include "VCM2D.h"
 
 int main() {
 
 	// ---------------------- SIMULATION SETUP ------------------------- //
 	// Problem type
 	const int type = 3;				// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
+	const int solver = 1;			// SOR = 1 / SIP = 2
 
 	// Time Setup
 	double TotalTime = 500;			// Total simulation time [s]
-	double dt = 0.001;				// Time step [s]
+	double dt = 0.5;					// Time step [s]
 
 	// -------------------------- MESH SETUP --------------------------- //
 	// Control Volumes
-	double dx = 0.00025;				// CV dimension in x direction[m]
-	double dy = 0.00025;				// CV dimension in y direction[m]
+	double dx = 0.001;				// CV dimension in x direction[m]
+	double dy = 0.001;				// CV dimension in y direction[m]
 	int N, Nx, Ny;
 	double Lx, Ly;
 
@@ -31,8 +31,6 @@ int main() {
 
 	// Pouch cell - Proposed Design (Side view) - Type 3
 	double t_pcm = 0.001;			// PCM/CPCM thickness [m]
-
-	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm);
 
 	// ----------------- BOUNDARY AND INITIAL CONDITIONS --------------- //
 	// Initial Condition
@@ -98,9 +96,9 @@ int main() {
 	double h_air = 2;
 	double T_air = 25;
 
-	// --------------------------- RESULTS DATA ------------------------- //
-	string results_folder = "C:/Users/renat/Documents/SVN/VCM-PCM/branches/2024_08_15_NewNavigation/Results/Results_";
-	string folder = create_results_folder(results_folder);
+	// --------------------------- INIT SIMULATION DATA ------------------------- //
+	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm);
+	string results = create_results_folder();
 
 	// -------------- MEMORY ALLOCATION AND INITIALIZATION -------------- //
 	int* R = (int*)malloc((N) * sizeof(int));
@@ -164,30 +162,28 @@ int main() {
 	// Simulation timer
 	clock_t start, end;
 
-	// Start simulation!
-	start = clock();		// Start timer!
-	
 	// Map mesh
 	int o = path(Nx, Ny, pp, ee, ww, nn, ss);
-	map(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu, 
-		k_cpcm,	kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat, 
+	map(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu,
+		k_cpcm,	kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat,
 		cp_pcm, cp_alu, cp_cpcm, cp_gra, pp, R, kx, ky, rho, cp);
 	
-	
-	// Store simulation info
-	plot_properties(o, Nx, Ny, dx, dy, pp, R, kx, ky, rho, cp, folder);
-	plot(o, Nx, Ny, dx, dy, pp, T, time, folder, "Temp");
-	plot(o, Nx, Ny, dx, dy, pp, f, time, folder, "Frac");
-	log(time, o, pp, R, T, f, folder);
-	
-	
-	while (time <= TotalTime) {
+	// Store initial mesh info
+	log(time, o, pp, R, T, f, results);
+	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, results);
+	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
+	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, time, results);
 
+	// Start simulation!
+	start = clock();		// Start timer!
+
+	while (time < TotalTime) 
+	{
 		printf("\n// -------------------- Time Step = %5.3fs -------------------- // \n", time);
-
-		// Copy previous time step data and check liquid cooling condition
+		
 		for (int i = 0; i < N; i++)
 		{
+			// Copy previous time step data and check liquid cooling condition
 			Ti[i] = T[i];
 			fi[i] = f[i];
 
@@ -198,35 +194,41 @@ int main() {
 				break;
 			}
 		}
-
+		
 		it = 0;
 		resf = 1.0;
 
-		while (resf > resmax) {
+		while (resf > resmax) 
+		{
+			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
 
-			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, 
-				sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, 
-				R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
-			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, 
-				L_cpcm, Tmelt, &resf);
+			if (solver == 1)
+			{
+				SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+			}
+			else
+			{
+				SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, time, results);
+			}
+
+			//resf = 0.0;
+			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, L_cpcm, Tmelt, &resf);
 
 			it++;
 			printf("\nIteracao = %i\t Residuo = %5.1E\n", it, resf);
 		}
-
-		// Store time step info
-		log(time, o, pp, R, T, f, folder);
-
-		// Print time step temperature and liquid fraction
-		if ((int(time) % 10) == 0 && int(time) != 0 && int(time) != previous_time) 
+		
+		time = time + dt;
+		
+		// Print time step info
+		log(time, o, pp, R, T, f, results);
+		if ((previous_time != int(time)) && (int(time) % 50 == 0))
 		{
 			previous_time = int(time);
-			plot(o, Nx, Ny, dx, dy, pp, T, time, folder, "Temp");
-			plot(o, Nx, Ny, dx, dy, pp, f, time, folder, "Frac");
+			plot_sim(o, Nx, Ny, dx, dy, pp, T, f, time, results);
+			//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 		}
 
-		time = time + dt;
 	}
 
 	end = clock(); // Stop timer!
@@ -238,6 +240,28 @@ int main() {
 
 	average_temperature(o, pp, T);
 
-	return 0;
+	free(rho);
+	free(pp);
+	free(ee);
+	free(ww);
+	free(nn);
+	free(ss);
+	free(cp);
+	free(ap);
+	free(aw);
+	free(ae);
+	free(an);
+	free(as);
+	free(Ti);
+	free(fi);
+	free(sp);
+	free(su);
+	free(kx);
+	free(ky);
+	free(R);
+	free(b);
+	free(T);
+	free(f);
 
+	return 0;
 }

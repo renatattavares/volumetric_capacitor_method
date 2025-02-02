@@ -1,10 +1,6 @@
 #include "..\Headers\Include.h"
 
-void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double t, double l,
-	double t_fin, double t_pcm, double kx_bat, double ky_bat, double k_pcm, double k_alu,	
-	double k_cpcm, double kx_gra, double ky_gra, double rho_bat, double rho_pcm, double rho_alu,
-	double rho_cpcm, double rho_gra, double cp_bat, double cp_pcm, double cp_alu, double cp_cpcm,
-	double cp_gra, int* pp, int* R, double* kx, double* ky, double* rho, double* cp)
+void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double t, double l, double t_fin, double t_pcm, double kx_bat, double ky_bat, double k_pcm, double k_alu, double k_cpcm, double kx_gra, double ky_gra, double rho_bat, double rho_pcm, double rho_alu,	double rho_cpcm, double rho_gra, double cp_bat, double cp_pcm, double cp_alu, double cp_cpcm,	double cp_gra, int* pp, int* R, double* kx, double* ky, double* rho, double* cp)
 {
 	// Simulation timer
 	clock_t start, end;
@@ -12,23 +8,21 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 
 	if (type == 1) // Cylindrical cell 
 	{
-		int a, i, j, m;
+		int a, i, l, m;
 		double x_center, y_center, x, y, radius;
 		double cell_radius = D / 2;
 		double x_cell = Nx * dx / 2;
 		double y_cell = Ny * dy / 2;
-		int Nx_ghosts = Nx + 2;
-		int	Ny_ghosts = Ny + 2;
 
 		for (a = 0; a < o; a++) 
 		{
 			m = pp[a];
-			i = (int)m / Ny_ghosts;
-			j = (int)m - i * Ny_ghosts;
+			i = m / (Ny + 2);
+			l = m - i * (Ny + 2);
 
 			// Mesh Regions and Properties
 			x_center = (dx * 0.5) + (i-1) * dx;
-			y_center = (dy * 0.5) + (j-1) * dy;
+			y_center = (dy * 0.5) + (l-1) * dy;
 			x = fabs(x_center - x_cell);
 			y = fabs(y_center - y_cell);
 			radius = sqrt(pow(x, 2) + pow(y, 2));
@@ -55,7 +49,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 
 	else if(type == 2) // Pouch cell - Baseline design 
 	{
-		int i, j, a, m, b;
+		int i, l, a, m, b;
 		double x_center;
 		double x_batt[16];
 		int batts = 8;
@@ -73,7 +67,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 		{
 			m = pp[b];
 			i = (int)m / Ny_ghosts;
-			j = (int)m - i * Ny_ghosts;
+			l = (int)m - i * Ny_ghosts;
 
 			// Mesh Regions and Properties
 			x_center = (dx * 0.5) + (i-1) * dx;
@@ -211,100 +205,87 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 }
 
 
-void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee,
-	int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an,
-	double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, 
-	double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp,
-	double L_pcm, double L_cpcm, double* f, double* fi, int* R, double Q, double dt, double h_cp,
-	double T_cp, double h_air, double T_air, double w, int active) 
+void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp,	double L_pcm, double L_cpcm, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, int active) 
 {
 
 	double L = 0.0;
-	int i, j, x, y;
-	int Nx_ghosts = Nx + 2;
-	int	Ny_ghosts = Ny + 2;
-	
-	for (i = 0; i < o; i++) 
+	int i, j, m, l;
+		
+	#pragma omp parallel for shared (ap, b) private (l, i, j, L)
+	for (m = 0; m < o; m++) 
 	{
-		if (pp[i] != 0)
+		L = 0.0;
+
+		l = pp[m];
+		i = (int)l / (Ny + 2);
+		j = (int)l - i * (Ny + 2);
+
+		su[l] = 0.0;
+		sp[l] = 0.0;
+
+		aw[l] = (2 * kx[ww[l]] * kx[l]) / (dx * (kx[ww[l]] * dx + kx[l] * dx));
+		ae[l] = (2 * kx[ee[l]] * kx[l]) / (dx * (kx[ee[l]] * dx + kx[l] * dx));
+		an[l] = (2 * ky[nn[l]] * ky[l]) / (dy * (ky[nn[l]] * dy + ky[l] * dy));
+		as[l] = (2 * ky[ss[l]] * ky[l]) / (dy * (ky[ss[l]] * dy + ky[l] * dy));
+
+		// Boundary conditions - West
+		if (i == 1)
 		{
-			L = 0.0;
-
-			j = pp[i];
-			x = (int)j / Ny_ghosts;
-			y = (int)j - x * Ny_ghosts;
-
-			su[j] = 0.0;
-			sp[j] = 0.0;
-
-			aw[j] = (2 * kx[ww[j]] * kx[j]) / (dx * (kx[ww[j]] * dx + kx[j] * dx));
-			ae[j] = (2 * kx[ee[j]] * kx[j]) / (dx * (kx[ee[j]] * dx + kx[j] * dx));
-			an[j] = (2 * ky[nn[j]] * ky[j]) / (dy * (ky[nn[j]] * dy + ky[j] * dy));
-			as[j] = (2 * ky[ss[j]] * ky[j]) / (dy * (ky[ss[j]] * dy + ky[j] * dy));
-
-			// Boundary conditions - West
-			if (x == 1)
-			{
-				aw[j] = 0;
-				su[j] = su[j] + (2 * h_air * T_air) / dx;
-				sp[j] = sp[j] - (2 * h_air) / dx;
-			}
-
-			// Boundary conditions - East
-			if (x == Nx)
-			{
-				ae[j] = 0;
-				su[j] = su[j] + (2 * h_air * T_air) / dx;
-				sp[j] = sp[j] - (2 * h_air) / dx;
-			}
-
-			// Boundary conditions - North
-			if (y == Ny)
-			{
-				an[j] = 0;
-				su[j] = su[j] + (2 * h_air * T_air) / dy;
-				sp[j] = sp[j] - (2 * h_air) / dy;
-
-			}
-
-			// Boundary conditions - South
-			if (y == 1)
-			{
-				as[j] = 0;
-				if (type == 3 && active == 1)
-				{
-					su[j] = su[j] + (2 * h_cp * T_cp) / dy;
-					sp[j] = sp[j] - (2 * h_cp) / dy;
-				}
-				else if (type == 2)
-				{
-					su[j] = su[j] + (2 * h_cp * T_cp) / dy;
-					sp[j] = sp[j] - (2 * h_cp) / dy;
-				}
-			}
-
-			//Boundary conditions - Source term
-			if (R[j] == 1)
-			{
-				su[j] = su[j] + Q;
-			}
-
-			// Latent Heat of Fusion
-			if (R[j] == 0)
-			{
-				L = L_pcm;
-			}
-			else if (R[j] == 5)
-			{
-				L = L_cpcm;
-			}
-
-			//Calculo do ap e do b
-			ap[j] = aw[j] + ae[j] + an[j] + as[j] + ((rho[j] * cp[j]) / dt) - sp[j];
-			b[j] = su[j] + ((rho[j] * cp[j] * Ti[j]) / dt) - ((rho[j] * L * (f[j] - fi[j])) / dt);
-			//printf("\nCV = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", i, ww[i], ee[i], nn[i], ss[i]);
-			//printf("CV = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", j, aw[j], ae[j], an[j], as[j], ap[j], b[j]);
+			aw[l] = 0;
+			su[l] = su[l] + (2 * h_air * T_air) / dx;
+			sp[l] = sp[l] - (2 * h_air) / dx;
 		}
+
+		// Boundary conditions - East
+		if (i == Nx)
+		{
+			ae[l] = 0;
+			su[l] = su[l] + (2 * h_air * T_air) / dx;
+			sp[l] = sp[l] - (2 * h_air) / dx;
+		}
+
+		// Boundary conditions - North
+		if (j == Ny)
+		{
+			an[l] = 0;
+			su[l] = su[l] + (2 * h_air * T_air) / dy;
+			sp[l] = sp[l] - (2 * h_air) / dy;
+
+		}
+
+		// Boundary conditions - South
+		if (j == 1)
+		{
+			as[l] = 0;
+			if ((type == 3 && active == 1) || (type == 2))
+			{
+				su[l] = su[l] + (2 * h_cp * T_cp) / dy;
+				sp[l] = sp[l] - (2 * h_cp) / dy;
+			}
+		}
+
+		//Boundary conditions - Source term
+		if (R[l] == 1)
+		{
+			su[l] = su[l] + Q;
+		}
+
+		// Latent Heat of Fusion
+		if (R[l] == 0)
+		{
+			L = L_pcm;
+		}
+		else if (R[l] == 5)
+		{
+			L = L_cpcm;
+		}
+
+		//Calculo do ap e do b
+		ap[l] = aw[l] + ae[l] + an[l] + as[l] + ((rho[l] * cp[l]) / dt) - sp[l];
+		b[l] = su[l] + ((rho[l] * cp[l] * Ti[l]) / dt) - ((rho[l] * L * (f[l] - fi[l])) / dt);
+		//printf("pp = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", l, ww[l], ee[l], nn[l], ss[l]);
+		//printf("pp = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t i = %i\t j = %i\n", l, aw[l], ae[l], an[l], as[l], i, j);
+		//printf("pp = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", l, aw[l], ae[l], an[l], as[l], ap[l], b[l]);
 	}
 }
 
@@ -332,8 +313,8 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 		Lx = batts * t + fins * t_fin + pcms * t_pcm;	// Mesh size in x direcition [m] 
 		Ly = l;											// Mesh size in y direcition [m]
 	}
-	Nx = (Lx / dx);				// Volumes in x direction
-	Ny = (Ly / dy);				// Volumes in y direction 
+	Nx = (int)(Lx / dx);				// Volumes in x direction
+	Ny = (int)(Ly / dy);				// Volumes in y direction 
 	N = (Nx + 2) * (Ny + 2);	// Total number of CVs. Include ghost elements in boundaries.
 
 	cout << "Mesh length in x direction [m]: " << Lx << endl;
@@ -352,32 +333,28 @@ int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
 	int i, j, l, o, m;
 
 	o = 0;
-	int Nx_ghosts = Nx + 2;
-	int	Ny_ghosts = Ny + 2;
 
-	for (i = 1; i <= Nx; i++) 
+	for (i = 1; i <= Nx; i++)
 	{
 		for (j = 1; j <= Ny; j++)
 		{
-			pp[o] = i * Ny_ghosts + j;
+			pp[o] = i * (Ny + 2) + j;
+			//printf("o = %i\t pp = %i\t i = %i\t j = %i\n", o, pp[o], i, j);
 			o++;
 		}
 	}
 
 	for (m = 0; m < o; m++)
 	{
-		if (pp[m] != 0)
-		{
-			l = pp[m];
-			i = (int)l / Ny_ghosts;
-			j = (int)l - i * Ny_ghosts;
-
-			ee[l] = (i + 1) * Ny_ghosts + j;
-			ww[l] = (i - 1) * Ny_ghosts + j;
-			nn[l] = i * Ny_ghosts + (j + 1);
-			ss[l] = i * Ny_ghosts + (j - 1);
-
-		}
+		l = pp[m];
+		i = (int)l / (Ny + 2);
+		j = (int)l - i * (Ny + 2);
+		
+		ee[l] = (i + 1) * (Ny + 2) + j;
+		ww[l] = (i - 1) * (Ny + 2) + j;
+		nn[l] = i * (Ny + 2) + (j + 1);
+		ss[l] = i * (Ny + 2) + (j - 1);
+		//printf("pp = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", l, ww[l], ee[l], nn[l], ss[l]);
 	}
 	return o;
 }
