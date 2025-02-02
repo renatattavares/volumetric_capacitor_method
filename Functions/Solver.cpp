@@ -1,19 +1,13 @@
 #include "..\Headers\Include.h"
 
-void SORt(int o, int N, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti, double Nx, double Ny, double dx, double dy, string folder) {
+void SORt(int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti) {
 
 
-	int i, j, m, it = 0;
+	int i, j, it = 0;
 	double R, T_old;
 	double res = 1.0;
 	double kappa = 1000;
-	double resmax = 1E-4;
-	double* plot_res = (double*)malloc((N) * sizeof(double));
-
-	for (m = 0; m < N; m++)
-	{
-		plot_res[m] = (double)0.0;
-	}
+	double resmax = 1E-6;
 
 	while (res > resmax)
 	{
@@ -21,18 +15,19 @@ void SORt(int o, int N, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap,
 		#pragma omp parallel for shared (res) private (j, T_old, R)
 		for (i = 0; i < o; i++)
 		{
-			j = pp[i];
-			T_old = T[j];
-			R = b[j] + aw[j] * T[ww[j]] + ae[j] * T[ee[j]] + an[j] * T[nn[j]] + as[j] * T[ss[j]];
-			T[j] = (T_old + kappa * (R / ap[j])) / (1 + kappa);
-			//printf("CV = %i\t w = %5.1E\t e = %5.1E\t n = %5.1E\t s = %5.1E\n", i, aw[i] * T[ww[i]], ae[i] * T[ee[i]], an[i] * T[nn[i]], as[i] * T[ss[i]]);
-			res = res + fabs(T[j] - T_old);
-			plot_res[j] = fabs(T[j] - T_old);
+			if (pp[i] != 0)
+			{
+				j = pp[i];
+				T_old = T[j];
+				R = b[j] + aw[j] * T[ww[j]] + ae[j] * T[ee[j]] + an[j] * T[nn[j]] + as[j] * T[ss[j]];
+				T[j] = (T_old + kappa * (R / ap[j])) / (1 + kappa);
+				//printf("CV = %i\t w = %5.1E\t e = %5.1E\t n = %5.1E\t s = %5.1E\n", i, aw[i] * T[ww[i]], ae[i] * T[ee[i]], an[i] * T[nn[i]], as[i] * T[ss[i]]);
+				res = res + fabs(T[j] - T_old);
+			}
 		}
-		//plot(o, Nx, Ny, dx, dy, pp, plot_res, it, folder, "Res");
 		res = res / o;
-		it++;
-		printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);			  
+		//it++;
+		//printf("Iteracao = %i\t Residuo = %13.5E\n", it, res);			  
 	}
 }
 
@@ -45,7 +40,7 @@ void SORf(int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double
 	double res = 0.0;
 	double total_f = 0.0;
 	double kappa = 0.23;			// Under relaxation factor
-	double resmax = 1.0E-4;			// Maximum property residue 
+	double resmax = 1.0E-3;			// Maximum property residue 
 	double L, Y, C;
 	double f_old;
 
@@ -105,89 +100,6 @@ void SORf(int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double
 	printf("Total f = %5.1E\n", total_f);
 }
 
-void SIP(int o, int N, int* pp, int* nn, int* ss, int* ee, int* ww, double* ap, double* ae, double* aw, double* an, double* as, double* b, double* T, double Nx, double Ny, double dx, double dy, string folder)
-{
-	int i, l, m, L;
-	int it = 0;
-	int maxit = 5;
-	double alpha = 0.5;
-	double res, resm, T_old;
-	double resmax = 1E-4;
-	double* c = (double*)malloc((N) * sizeof(double));
-	double* d = (double*)malloc((N) * sizeof(double));
-	double* e = (double*)malloc((N) * sizeof(double));
-	double* r = (double*)malloc((N) * sizeof(double));
-	double* s = (double*)malloc((N) * sizeof(double));
-	double* u = (double*)malloc((N) * sizeof(double));
-	double* plot_res = (double*)malloc((N) * sizeof(double));
-
-	for (m = 0; m < N; m++)
-	{
-		c[m] = (double)0.0;
-		d[m] = (double)0.0;
-		e[m] = (double)0.0;
-		r[m] = (double)0.0;
-		s[m] = (double)0.0;
-		u[m] = (double)0.0;
-		plot_res[m] = (double)0.0;
-	}
-
-	//Alocação dos coeficientes
-	for (m = 0; m < o; m++)
-	{
-		l = pp[m];
-		c[l] = as[l] / (1.0 + alpha * s[ww[l]]);
-		d[l] = aw[l] / (1.0 + alpha * u[ss[l]]);
-		e[l] = 1.0 / (alpha * (c[l] * s[ww[l]] + d[l] * u[ss[l]]) - (d[l] * s[ss[l]] + c[l] * u[ww[l]]) - ap[l]);
-		s[l] = (ae[l] - alpha * c[l] * s[ww[l]]) * e[l];
-		u[l] = (an[l] - alpha * c[l] * s[ww[l]]) * e[l];
-		//printf("CV = %i\t c = %5.1E\t d = %5.1E\t e = %5.1E\t s = %5.5E\t u = %5.1E\n", l, c[l], d[l], e[l], s[l], u[l]);
-	}
-
-	//Processo Iterativo
-	for (L = 1; L <= maxit; L++)
-	{
-		resm = 0.0;
-
-		//Forwards Step
-		for (m = 0; m < o; m++)
-		{
-			l = pp[m];
-			res = -b[l] - (aw[l] * T[ww[l]] + ae[l] * T[ee[l]] + as[l] * T[ss[l]] + an[l] * T[nn[l]] - ap[l] * T[l]);
-			r[l] = e[l] * (res - (c[l] * r[ww[l]] + d[l] * r[ss[l]]));
-			//printf("pp = %i\t r = %5.1E\t res = %5.1E\t c = %5.1E\t d = %5.1E\t e = %5.1E\t r[ww[l]] = %5.1E\t r[ss[l]] = %5.1E\n", l, r[l], res, c[l], d[l], e[l], r[ww[l]], r[ss[l]]);
-		}
-
-		//Backwards Step
-		for (m = o - 1; m >= 0; m--)
-		{
-			l = pp[m];
-			r[l] = r[l] - u[l] * r[ee[l]] - s[l] * r[nn[l]];
-			T_old = T[l];
-			T[l] = T[l] + r[l];
-
-			resm = resm + fabs(T[l] - T_old);
-			plot_res[l] = fabs(T[l] - T_old);
-		}
-
-		resm = resm / o;
-		printf("Iteracao = %i\t resm = %5.1E\n", it, resm);
-		plot(o, Nx, Ny, dx, dy, pp, plot_res, it, folder, "Res");
-		it++;
-
-		if (resm < resmax) 
-		{
-			break;
-		}
-	}
-	free(c);
-	free(d);
-	free(e);
-	free(r);
-	free(s);
-	free(u);
-	return;
-}
 
 void average_temperature(int o, int* pp, double* T)
 {

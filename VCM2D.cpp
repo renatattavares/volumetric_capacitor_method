@@ -1,20 +1,20 @@
  #include "Headers/Include.h"
+#include "VCM2D.h"
 
 int main() {
 
 	// ---------------------- SIMULATION SETUP ------------------------- //
 	// Problem type
-	const int type = 1;				// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
-	const int solver = 2;
+	const int type = 3;				// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
 
 	// Time Setup
-	double TotalTime = 1;			// Total simulation time [s]
-	double dt = 1;				// Time step [s]
+	double TotalTime = 500;			// Total simulation time [s]
+	double dt = 0.001;				// Time step [s]
 
 	// -------------------------- MESH SETUP --------------------------- //
 	// Control Volumes
-	double dx = 0.001;				// CV dimension in x direction[m]
-	double dy = 0.001;				// CV dimension in y direction[m]
+	double dx = 0.00025;				// CV dimension in x direction[m]
+	double dy = 0.00025;				// CV dimension in y direction[m]
 	int N, Nx, Ny;
 	double Lx, Ly;
 
@@ -91,15 +91,16 @@ int main() {
 	double L_cpcm = porosity * L_pcm;
 
 	// Cold Plate
-	double h_cp = 200;
-	double T_cp = 25;
+	double h_cp = 120;
+	double T_cp = 15;
 
 	// Natural Convection
 	double h_air = 2;
 	double T_air = 25;
 
 	// --------------------------- RESULTS DATA ------------------------- //
-	string results = create_results_folder();
+	string results_folder = "C:/Users/renat/Documents/SVN/VCM-PCM/branches/2024_08_15_NewNavigation/Results/Results_";
+	string folder = create_results_folder(results_folder);
 
 	// -------------- MEMORY ALLOCATION AND INITIALIZATION -------------- //
 	int* R = (int*)malloc((N) * sizeof(int));
@@ -108,8 +109,6 @@ int main() {
 	int* ww = (int*)malloc((N) * sizeof(int));
 	int* nn = (int*)malloc((N) * sizeof(int));
 	int* ss = (int*)malloc((N) * sizeof(int));
-	int* ii = (int*)malloc((N) * sizeof(int));
-	int* jj = (int*)malloc((N) * sizeof(int));
 	double* rho = (double*)malloc((N) * sizeof(double));
 	double* cp = (double*)malloc((N) * sizeof(double));
 	double* ap = (double*)malloc((N) * sizeof(double));
@@ -126,11 +125,6 @@ int main() {
 	double* f = (double*)malloc((N) * sizeof(double));
 	double* b = (double*)malloc((N) * sizeof(double));
 	double* T = (double*)malloc((N) * sizeof(double));
-	double* pp2 = (double*)malloc((N) * sizeof(double));
-	double* ee2 = (double*)malloc((N) * sizeof(double));
-	double* ww2 = (double*)malloc((N) * sizeof(double));
-	double* nn2 = (double*)malloc((N) * sizeof(double));
-	double* ss2 = (double*)malloc((N) * sizeof(double));
 
 	for (int i = 0; i < N; i++) 
 	{
@@ -140,11 +134,6 @@ int main() {
 		ww[i] = 0;
 		nn[i] = 0;
 		ss[i] = 0;
-		pp2[i] = 0.0;
-		ee2[i] = 0.0;
-		ww2[i] = 0.0;
-		nn2[i] = 0.0;
-		ss2[i] = 0.0;
 		rho[i] = 0.0;
 		cp[i] = 0.0;
 		ap[i] = 0.0;
@@ -169,7 +158,7 @@ int main() {
 	int active = 0;					// Active liquid cooling
 	double time = 0.0;				// Current time step [s] 
 	double resf = 1.0;				// Initializing residue
-	double resmax = 1.0E-4;			// Maximum property residue 
+	double resmax = 1.0E-3;			// Maximum property residue 
 	int previous_time = 0;
 
 	// Simulation timer
@@ -180,26 +169,19 @@ int main() {
 	
 	// Map mesh
 	int o = path(Nx, Ny, pp, ee, ww, nn, ss);
-	map(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu,
-		k_cpcm,	kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat,
+	map(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu, 
+		k_cpcm,	kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat, 
 		cp_pcm, cp_alu, cp_cpcm, cp_gra, pp, R, kx, ky, rho, cp);
-
-	for (int i = 0; i < N; i++)
-	{
-		ww2[i] = 1.0 * ww[i];
-		ee2[i] = 1.0 * ee[i];
-		nn2[i] = 1.0 * nn[i];
-		ss2[i] = 1.0 * ss[i];
-		pp2[i] = 1.0 * pp[i];
-	}
+	
 	
 	// Store simulation info
-	plot_properties(o, Nx, Ny, dx, dy, pp, R, kx, ky, rho, cp, results);
-	plot(o, Nx, Ny, dx, dy, pp, T, time, results, "Temp");
-	plot(o, Nx, Ny, dx, dy, pp, f, time, results, "Frac");
-	//log(time, o, pp, R, T, f, results);
-
-	while (time < TotalTime) {
+	plot_properties(o, Nx, Ny, dx, dy, pp, R, kx, ky, rho, cp, folder);
+	plot(o, Nx, Ny, dx, dy, pp, T, time, folder, "Temp");
+	plot(o, Nx, Ny, dx, dy, pp, f, time, folder, "Frac");
+	log(time, o, pp, R, T, f, folder);
+	
+	
+	while (time <= TotalTime) {
 
 		printf("\n// -------------------- Time Step = %5.3fs -------------------- // \n", time);
 
@@ -222,38 +204,29 @@ int main() {
 
 		while (resf > resmax) {
 
-			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
+			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, 
+				sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, 
+				R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
+			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
+			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, 
+				L_cpcm, Tmelt, &resf);
 
-			plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
-
-			if (solver == 1)
-			{
-				SORt(o, N, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, Nx, Ny, dx, dy, results);
-			}
-			else
-			{
-				SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, results);
-			}
-
-			resf = 0.0;
-
-			//SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, L_cpcm, Tmelt, &resf);
-			//it++;
-			//printf("\nIteracao = %i\t Residuo = %5.1E\n", it, resf);
+			it++;
+			printf("\nIteracao = %i\t Residuo = %5.1E\n", it, resf);
 		}
 
-		time = time + dt;
-
 		// Store time step info
-		//log(time, o, pp, R, T, f, results);
+		log(time, o, pp, R, T, f, folder);
 
 		// Print time step temperature and liquid fraction
 		if ((int(time) % 10) == 0 && int(time) != 0 && int(time) != previous_time) 
 		{
-			//previous_time = int(time);
-			//plot(o, Nx, Ny, dx, dy, pp, T, time, results, "Temp");
-			//plot(o, Nx, Ny, dx, dy, pp, f, time, results, "Frac");
+			previous_time = int(time);
+			plot(o, Nx, Ny, dx, dy, pp, T, time, folder, "Temp");
+			plot(o, Nx, Ny, dx, dy, pp, f, time, folder, "Frac");
 		}
+
+		time = time + dt;
 	}
 
 	end = clock(); // Stop timer!

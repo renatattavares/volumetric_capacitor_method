@@ -1,6 +1,7 @@
 #include "..\Headers\Include.h"
 
-void plot_properties(int o, int Nx, int Ny, double dx, double dy, int* pp, int* R, double* kx, double* ky, double* rho, double* cp, string dir) {
+void plot_properties(int o, int Nx, int Ny, double dx, double dy, int* pp, int* R, 
+	double* kx, double* ky, double* rho, double* cp, string dir) {
 
 	double rx{}, ry{};
 
@@ -44,8 +45,8 @@ void plot_properties(int o, int Nx, int Ny, double dx, double dy, int* pp, int* 
 	fout << endl;
 	fout << "POINT_DATA " << Nx * Ny << endl;
 
-	// Write PPs
-	fout << "SCALARS PP int" << endl;
+	// Write IDs
+	fout << "SCALARS IDs int" << endl;
 	fout << "LOOKUP_TABLE my_table" << endl;
 
 	for (int a = 0; a < o; a++)
@@ -105,153 +106,36 @@ void plot_properties(int o, int Nx, int Ny, double dx, double dy, int* pp, int* 
 
 }
 
-void plot_coef(int o, int Nx, int Ny, double dx, double dy, int* pp, double* aw, double* ae, double* an, double* as, double* ap, double* b, double time, string results_folder) {
+
+
+void plot(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, double time, 
+	string dir, string property) {
 
 	double rx{}, ry{};
-	string iteration = to_string(int(time));
-	string title = "Coefficients °C plot";
-	string info = "SCALARS Coefficients float";
-	string filename;
-	string property = "Coef";
-
-	// Create Results Folder
-	string property_folder = results_folder + "\\" + property;
-
-	if (_mkdir(property_folder.c_str()) == 0)
-	{
-		cout << "Created folder " << property_folder << " succesfully!" << endl;
-	}
-
-	// Create filename
-	filename = property_folder + "\\" + property + "_" + iteration + ".vtk";
-
-	cout << "\n_________________________________________________________________________" << endl;
-	cout << "\nWriting coefficients' files..." << endl;
-
-	// Build
 	ofstream fout;
-	fout.open(filename);
-	fout << "# vtk DataFile Version 2.0" << endl;
-	fout << "Physical Properties plot" << endl;
-	fout << "ASCII" << endl;
-	fout << endl;
-	fout << "DATASET RECTILINEAR_GRID" << endl;
-	fout << "DIMENSIONS " << Ny << " " << Nx << " 1" << endl;
-	fout << endl;
-	fout << "Y_COORDINATES " << Nx << " float" << endl;
-
-
-	for (int i = 0; i < Nx; i++)
-	{
-		rx = i * dx + 0.5 * dx;
-		fout << rx << " ";
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "X_COORDINATES " << Ny << " float" << endl;
-
-	for (int j = 0; j < Ny; j++)
-	{
-		ry = j * dy + 0.5 * dy;
-		fout << ry << " ";
-	}
-
-	fout << endl;
-	fout << endl;
-	fout << "Z_COORDINATES 1 float" << endl;
-	fout << "0" << endl;
-	fout << endl;
-	fout << "POINT_DATA " << Nx * Ny << endl;
-
-	fout << "SCALARS pp int" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << pp[a] << endl;
-	}
-
-	fout << "SCALARS aw float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << aw[pp[a]] << endl;
-	}
-
-	fout << "SCALARS ae float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << ae[pp[a]] << endl;
-	}
-
-	fout << "SCALARS an float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << an[pp[a]] << endl;
-	}
-
-	fout << "SCALARS as float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << ap[pp[a]] << endl;
-	}
-
-	fout << "SCALARS ap float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << b[pp[a]] << endl;
-	}
-
-	fout << "SCALARS b float" << endl;
-	fout << "LOOKUP_TABLE my_table" << endl;
-
-	for (int a = 0; a < o; a++)
-	{
-		fout << as[pp[a]] << endl;
-	}
-
-	// Exit
-	fout.close();
-	cout << "\nDone." << endl;
-	cout << "_________________________________________________________________________" << endl << endl;
-
-}
-
-void plot(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, double time, string results_folder, string property) {
-
-	double rx{}, ry{};
-	
 	string iteration = to_string(int(time));
-	string title = "Property °C plot";
-	string info = "SCALARS Property float";
 	string filename;
+	string title;
+	string info;
 
-	// Create Results Folder
-	string property_folder = results_folder + "\\" + property;
-		
-	if (_mkdir(property_folder.c_str()) == 0) 
-	{
-		cout << "Created folder " << property_folder << " succesfully!" << endl;
+	// Identify property
+	if (property == "Temp") {
+		filename = dir + "/Temp/Temp_" + iteration + ".vtk";
+		title = "Temperature °C plot";
+		info = "SCALARS Temperature float";
 	}
-
-	// Create filename
-	filename = property_folder + "\\" + property + "_" + iteration + ".vtk";
+	else if (property == "Frac") {
+		filename = dir + "/Frac/Frac_" + iteration + ".vtk";
+		title = "Liquid Fraction Mass plot";
+		info = "SCALARS Liquid_Fraction float";
+	}
+	else {
+		return;
+	}
 
 	cout << "\n_________________________________________________________________________" << endl;
 	cout << "\nWriting file..." << endl;
 
-	// Build VTK
-	ofstream fout;
 	fout.open(filename);
 	fout << "# vtk DataFile Version 2.0" << endl;
 	fout << title << endl;
@@ -289,9 +173,10 @@ void plot(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, doubl
 	fout << info << endl;
 	fout << "LOOKUP_TABLE my_table" << endl;
 
-	for (int a = 0; a < o; a++)
-	{
+	for (int a = 0; a < o; a++) {
+
 		fout << P[pp[a]] << endl;
+
 	}
 
 	// Exit
@@ -302,39 +187,37 @@ void plot(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, doubl
 	return;
 }
 
-string create_results_folder() {
 
+string create_results_folder(string base_folder) {
 	// Get the current time
 	time_t t = time(nullptr);
 	tm* now = localtime(&t);
 
 	// Create a string stream to format the date and time
 	ostringstream oss;
-	oss << (now->tm_year + 1900) << '_'
-		<< setw(2) << setfill('0') << (now->tm_mon + 1) << '_'
+	oss << (now->tm_year + 1900) << '-'
+		<< setw(2) << setfill('0') << (now->tm_mon + 1) << '-'
 		<< setw(2) << setfill('0') << now->tm_mday << '_'
-		<< setw(2) << setfill('0') << now->tm_hour << '_'
-		<< setw(2) << setfill('0') << now->tm_min << '_'
-		<< setw(2) << setfill('0') << now->tm_sec;
+		<< setw(2) << setfill('0') << now->tm_hour << '-'
+		<< setw(2) << setfill('0') << now->tm_min;
 
+	// The formatted date-time string
 	string dateTimeStr = oss.str();
 
-	// Get current folder
-	char cwd[1024];
-	getcwd(cwd, 1024);
-	string current_folder(cwd);
-	
-	// Construct results folder
-	current_folder = current_folder + "\\Results\\Results_";
-	string results_folder = current_folder + dateTimeStr;
+	// The folder string
+	string folder = base_folder + dateTimeStr;
+	string tfolder = folder + "/Temp";
+	string ffolder = folder + "/Frac";
 
-	if (_mkdir(results_folder.c_str()) != 0) 
-	{
+	if (_mkdir(folder.c_str()) != 0 || _mkdir(tfolder.c_str()) != 0 || _mkdir(ffolder.c_str()) != 0) {
 		cout << "Failed creating results folder..." << endl;
-		return results_folder;
+		return folder;
 	}
-	return results_folder;
+
+	return folder;
+
 }
+
 
 void log(double time, int o, int* pp, int* R, double* T, double* f, string results_folder) {
 
