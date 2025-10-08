@@ -1,6 +1,6 @@
 #include "..\Headers\Include.h"
 
-void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, int* ee, int* nn, int* ss, int* R, double* kx, double* ky, double* rho, double* cp, string dir) {
+void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, int* ee, int* nn, int* ss, int* R, double* kx, double* ky, double* rho, double* cp, double* L, string dir) {
 
 	double rx{}, ry{};
 
@@ -132,6 +132,15 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 	for (int a = 0; a < o; a++)
 	{
 		fout << cp[pp[a]] << endl;
+	}
+
+	// Write Latent Heat Information
+	fout << "SCALARS Latent_Heat float" << endl;
+	fout << "LOOKUP_TABLE Latent_Heat" << endl;
+
+	for (int a = 0; a < o; a++)
+	{
+		fout << L[pp[a]] << endl;
 	}
 
 	// Exit
@@ -503,4 +512,80 @@ void plot_res(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, i
 	cout << "_________________________________________________________________________" << endl << endl;
 
 	return;
+}
+
+void log_plot(double time, int o, int* pp, int* R, double* T, double* f) {
+
+	double delta_temp = 0.0;
+	double max_temp = 0.0;
+	double min_temp = 1000.0;
+	double total_f = 0.0;
+	int can_melt = 0;
+	int l = 0;
+
+	for (int i = 0; i < o; i++)
+	{
+		l = pp[i];
+		if (T[l] > max_temp && R[l] == 1)
+		{
+			max_temp = T[l];
+		}
+		if (R[l] == 0 || R[l] == 5)
+		{
+			total_f = total_f + f[l];
+			can_melt++;
+		}
+	}
+
+	total_f = total_f / can_melt;
+
+	cout << "Max temperature:" << max_temp << endl;
+	cout << "Liquid Fraction:" << total_f << endl;
+
+}
+
+void log_res(double time, int o, int* pp, int* R, double* T, double* f, string results_folder) {
+
+	double delta_temp = 0.0;
+	double max_temp = 0.0;
+	double min_temp = 1000.0;
+	double total_f = 0.0;
+	int can_melt = 0;
+	int l = 0;
+
+	// Log file
+	ofstream fout;
+	string filename;
+	filename = results_folder + "/Log_Residue.dat";
+
+	for (int i = 0; i < o; i++)
+	{
+		l = pp[i];
+		if (T[l] > max_temp && R[l] == 1)
+		{
+			max_temp = T[l];
+		}
+		if (T[l] < min_temp && R[l] == 1)
+		{
+			min_temp = T[l];
+		}
+		if (R[l] == 0 || R[l] == 5)
+		{
+			total_f = total_f + f[l];
+			can_melt++;
+		}
+	}
+
+	delta_temp = max_temp - min_temp;
+	total_f = total_f / can_melt;
+
+	fout.open(filename, std::ios_base::app);
+	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << endl;
+	fout.close();
+
+	//cout << "Max temperature:" << max_temp << endl;
+	//cout << "Min temperature:" << min_temp << endl;
+	//cout << "Delta temperature:" << delta_temp << endl;
+	//cout << "Liquid Fraction:" << total_f << endl;
+
 }

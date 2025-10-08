@@ -1,6 +1,6 @@
 #include "..\Headers\Include.h"
 
-void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double t, double l, double t_fin, double t_pcm, double kx_bat, double ky_bat, double k_pcm, double k_alu, double k_cpcm, double kx_gra, double ky_gra, double rho_bat, double rho_pcm, double rho_alu,	double rho_cpcm, double rho_gra, double cp_bat, double cp_pcm, double cp_alu, double cp_cpcm,	double cp_gra, int* pp, int* R, double* kx, double* ky, double* rho, double* cp)
+void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double t, double l, double t_fin, double t_pcm, double kx_bat, double ky_bat, double k_pcm, double k_alu, double k_cpcm, double kx_gra, double ky_gra, double rho_bat, double rho_pcm, double rho_alu,	double rho_cpcm, double rho_gra, double cp_bat, double cp_pcm, double cp_alu, double cp_cpcm, double cp_gra, double L_pcm, double L_cpcm, int* pp, int* R, double* kx, double* ky, double* rho, double* cp, double* L)
 {
 	// Simulation timer
 	clock_t start, end;
@@ -34,6 +34,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 				ky[m] = ky_bat;
 				rho[m] = rho_bat;
 				cp[m] = cp_bat;
+				L[m] = 0.0;
 			}
 			else 
 			{
@@ -42,6 +43,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 				ky[m] = k_pcm;
 				rho[m] = rho_pcm;
 				cp[m] = cp_pcm;
+				L[m] = L_pcm;
 			}
 			//printf("CV = %4i\t x_center = %4.5f\t y_center = %4.5f\t radius = %4.5f\t R = %4i\n", m, x_center, y_center, radius, R[m]);
 		}
@@ -81,6 +83,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 					ky[m] = ky_bat;
 					rho[m] = rho_bat;
 					cp[m] = cp_bat;
+					L[m] = 0.0;
 					break;
 				}
 				else {
@@ -89,6 +92,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 					ky[m] = k_alu;
 					rho[m] = rho_alu;
 					cp[m] = cp_alu;
+					L[m] = 0.0;
 				}
 			}
 		}
@@ -148,6 +152,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 					ky[m] = ky_bat;
 					rho[m] = rho_bat;
 					cp[m] = cp_bat;
+					L[m] = 0.0;
 					break;
 				}
 				else
@@ -162,6 +167,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 							ky[m] = ky_gra;
 							rho[m] = rho_gra;
 							cp[m] = cp_gra;
+							L[m] = 0.0;
 							break;
 						}
 						else
@@ -179,6 +185,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 										ky[m] = k_cpcm;
 										rho[m] = rho_cpcm;
 										cp[m] = cp_cpcm;
+										L[m] = L_cpcm;
 										break;	
 									}
 									else
@@ -188,6 +195,7 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 										ky[m] = k_pcm;
 										rho[m] = rho_pcm;
 										cp[m] = cp_pcm;
+										L[m] = L_pcm;
 										break;
 									}
 								}
@@ -205,16 +213,14 @@ void map(int type, int o, int Nx, int Ny, double dx, double dy, double D, double
 }
 
 
-void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp,	double L_pcm, double L_cpcm, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, int active) 
+void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, int active) 
 {
 
-	double L = 0.0;
 	int i, j, m, l;
 		
-	#pragma omp parallel for shared (ap, b) private (l, i, j, L)
+	#pragma omp parallel for shared (ap, b) private (l, i, j)
 	for (m = 0; m < o; m++) 
 	{
-		L = 0.0;
 
 		l = pp[m];
 		i = (int)l / (Ny + 2);
@@ -232,35 +238,31 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 		if (i == 1)
 		{
 			aw[l] = 0;
-			su[l] = su[l] + (2 * h_air * T_air) / dx;
-			sp[l] = sp[l] - (2 * h_air) / dx;
+			su[l] = su[l] + (h_air * T_air) / dx;
+			sp[l] = sp[l] - (h_air) / dx;
 		}
-
-		// Boundary conditions - East
-		if (i == Nx)
+		else if (i == Nx) // Boundary conditions - East
 		{
 			ae[l] = 0;
-			su[l] = su[l] + (2 * h_air * T_air) / dx;
-			sp[l] = sp[l] - (2 * h_air) / dx;
+			su[l] = su[l] + (h_air * T_air) / dx;
+			sp[l] = sp[l] - (h_air) / dx;
 		}
 
 		// Boundary conditions - North
 		if (j == Ny)
 		{
 			an[l] = 0;
-			su[l] = su[l] + (2 * h_air * T_air) / dy;
-			sp[l] = sp[l] - (2 * h_air) / dy;
+			su[l] = su[l] + (h_air * T_air) / dy;
+			sp[l] = sp[l] - (h_air) / dy;
 
 		}
-
-		// Boundary conditions - South
-		if (j == 1)
+		else if (j == 1) // Boundary conditions - South
 		{
 			as[l] = 0;
 			if ((type == 3 && active == 1) || (type == 2))
 			{
-				su[l] = su[l] + (2 * h_cp * T_cp) / dy;
-				sp[l] = sp[l] - (2 * h_cp) / dy;
+				su[l] = su[l] + (h_cp * T_cp) / dy;
+				sp[l] = sp[l] - (h_cp) / dy;
 			}
 		}
 
@@ -270,22 +272,10 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 			su[l] = su[l] + Q;
 		}
 
-		// Latent Heat of Fusion
-		if (R[l] == 0)
-		{
-			L = L_pcm;
-		}
-		else if (R[l] == 5)
-		{
-			L = L_cpcm;
-		}
-
 		//Calculo do ap e do b
 		ap[l] = aw[l] + ae[l] + an[l] + as[l] + ((rho[l] * cp[l]) / dt) - sp[l];
-		b[l] = su[l] + ((rho[l] * cp[l] * Ti[l]) / dt) - ((rho[l] * L * (f[l] - fi[l])) / dt);
-		//printf("pp = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", l, ww[l], ee[l], nn[l], ss[l]);
-		//printf("pp = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t i = %i\t j = %i\n", l, aw[l], ae[l], an[l], as[l], i, j);
-		//printf("pp = %i\t aw = %5.1E\t ae = %5.1E\t an = %5.1E\t as = %5.1E\t ap = %5.1E\t b = %5.1E\n", l, aw[l], ae[l], an[l], as[l], ap[l], b[l]);
+		b[l] = su[l] + ((rho[l] * cp[l] * Ti[l]) / dt) - ((rho[l] * L[l] * (f[l] - fi[l])) / dt);
+		//printf("pp = %i\t aw = %5.2E\t ae = %5.2E\t an = %5.2E\t as = %5.2E\t ap = %5.2E\t su = %5.2E\t sp = %5.2E\n", l, aw[l], ae[l], an[l], as[l], ap[l], su[l], sp[l]);
 	}
 }
 
@@ -315,7 +305,7 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 	}
 	Nx = (int)(Lx / dx);				// Volumes in x direction
 	Ny = (int)(Ly / dy);				// Volumes in y direction 
-	N = (Nx + 2) * (Ny + 2);	// Total number of CVs. Include ghost elements in boundaries.
+	N = (Nx + 2) * (Ny + 2);			// Total number of CVs. Include ghost elements in boundaries.
 
 	cout << "Mesh length in x direction [m]: " << Lx << endl;
 	cout << "Mesh length in y direction [m]: " << Ly << endl;
@@ -367,12 +357,26 @@ void nonlinear_cond(int o, int* pp, int* R, double* f, double* kx, double* ky, d
 
 	for (int i = 0; i < o; i++)
 	{
-		if (pp[i] != 0 && (R[pp[i]] == 5 || R[pp[i]] == 0))
+		if (pp[i] != 0 && R[pp[i]] == 0) // PCM
 		{
 			j = pp[i];
 			ka = kx[j];
 
 			kx[j] = 0.425 * (1 - f[j]) + 0.152 * f[j]; // Conductivity based on liquid fraction
+			ky[j] = kx[j];
+
+			res = res + fabs(kx[j] - ka);
+			if (fabs(kx[j] - ka) > 1.0E-05)
+			{
+				a++;
+			}
+		}
+		else if (pp[i] != 0 && R[pp[i]] == 5) // PCM
+		{
+			j = pp[i];
+			ka = kx[j];
+
+			kx[j] = 31.39 * (1 - f[j]) + 31.15 * f[j]; // Conductivity based on liquid fraction
 			ky[j] = kx[j];
 
 			res = res + fabs(kx[j] - ka);

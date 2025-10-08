@@ -32,16 +32,15 @@ void SORt(int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double
 }
 
 
-void SORf (int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti, int* R, double* f, double* fi, double* rho, double dt, double L_pcm, double L_cpcm, double Tmelt, double* resf) {
+void SORf (int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, double* aw, double* ae, double* an, double* as, double* b, double* T, double* Ti, int* R, double* f, double* fi, double* rho, double* L, double dt, double Tmelt, double* resf) {
 
 	int i, j;
 	int N = 1;
 	int can_melt = 1;
 	double res = 0.0;
 	double total_f = 0.0;
-	double kappa = 0.23;			// Under relaxation factor
-	double resmax = 1.0E-4;			// Maximum property residue 
-	double L, Y, C;
+	double kappa = 0.23;				// Under relaxation factor
+	double Y, C;
 	double f_old;
 
 	for (i = 0; i < o; i++)
@@ -49,23 +48,13 @@ void SORf (int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, doubl
 		if (pp[i] != 0)
 		{
 			j = pp[i];
-
-			// Latent Heat of Fusion
-			if (R[j] == 0)
-			{
-				L = L_pcm;
+			
+			if (R[j] == 0 || R[j] == 5)
+			{			
 				f_old = f[j];
 				Y = aw[j] * T[ww[j]] + ae[j] * T[ee[j]] + an[j] * T[nn[j]] + as[j] * T[ss[j]];
-				C = b[j] + ((rho[j] * L) / dt) * f_old;
-				f[j] = (f_old + (kappa * (dt / (rho[j] * L)) * (Y + C - ap[j] * Tmelt))) / (1 + kappa);
-			}
-			else if (R[j] == 5)
-			{
-				L = L_cpcm;
-				f_old = f[j];
-				Y = aw[j] * T[ww[j]] + ae[j] * T[ee[j]] + an[j] * T[nn[j]] + as[j] * T[ss[j]];
-				C = b[j] + ((rho[j] * L) / dt) * f_old;
-				f[j] = (f_old + (kappa * (dt / (rho[j] * L)) * (Y + C - ap[j] * Tmelt))) / (1 + kappa);
+				C = b[j] + ((rho[j] * L[j]) / dt) * f_old;
+				f[j] = (f_old + (kappa * (dt / (rho[j] * L[j])) * (Y + C - ap[j] * Tmelt))) / (1 + kappa);
 			}
 			else
 			{
@@ -97,7 +86,7 @@ void SORf (int o, int* pp, int* ww, int* ee, int* nn, int* ss, double* ap, doubl
 	}
 	*resf = res / N;
 	total_f = total_f / can_melt;
-	printf("Total f = %5.1E\n", total_f);
+	//printf("Total f = %5.1E\n", total_f);
 }
 
 void SIP(int o, int N, int* pp, int* nn, int* ss, int* ee, int* ww, double* ap, double* ae, double* aw, double* an, double* as, double* b, double* T, double Nx, double Ny, double dx, double dy, double time, string folder)
