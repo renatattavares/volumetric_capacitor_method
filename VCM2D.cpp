@@ -4,17 +4,17 @@ int main() {
 
 	// ---------------------- SIMULATION SETUP ------------------------- //
 	// Problem type
-	const int type = 3;				// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
-	int pouch = 1;					// DOUBLE = 1 / PCM  = 2 / CPCM = 3
+	const int type = 3;			// Cylindrical = 1 / Pouch Baseline = 2 / Pouch proposed = 3
+	const int pouch = 1;		// DOUBLE = 1 / PCM  = 2 / CPCM = 3
 
 	// Time Setup
-	double TotalTime = 500;			// Total simulation time [s]
-	double dt = 0.001;					// Time step [s]
+	double TotalTime = 500;		// Total simulation time [s]
+	double dt =	0.001;			// Time step [s]
 
 	// -------------------------- MESH SETUP --------------------------- //
 	// Control Volumes
-	double dx = 0.0005;				// CV dimension in x direction[m]
-	double dy = 0.0005;				// CV dimension in y direction[m]
+	double dx = 0.00025;			// CV dimension in x direction[m]
+	double dy = 0.00050;			// CV dimension in y direction[m]
 	int N, Nx, Ny;
 	double Lx, Ly;
 
@@ -34,8 +34,8 @@ int main() {
 
 	// ----------------- BOUNDARY AND INITIAL CONDITIONS --------------- //
 	// Initial Condition
-	double Tinitial = 25;			// Temperature [°C] in time = 0s
-	double Q = 200000;				// W/m³
+	double Tinitial = 25;			// Temperature [ï¿½C] in time = 0s
+	double Q = 200000;				// W/mï¿½
 
 	// Temperatures for boundary conditions
 	double Tn = 0.0;				// North
@@ -50,8 +50,8 @@ int main() {
 	double qw = 0.0;				// West
 
 	// ------------------------ PHYSICAL PROPERTIES --------------------- //
-	// Option 1: RT 18 HC [T_melt = 18°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/m³ (solid/liquid)]
-	// Option 2: RT 21 HC [T_melt = 21°C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/m³ (solid/liquid)]
+	// Option 1: RT 18 HC [T_melt = 18ï¿½C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/mï¿½ (solid/liquid)]
+	// Option 2: RT 21 HC [T_melt = 21ï¿½C, Latent heat of fusion = 250 kJ/kg, Cp = 2 kJ/kg. K, k = 0.2 W/kg.K, rho = 880 <-> 770 kg/mï¿½ (solid/liquid)]
 
 	// Battery
 	double rho_bat = 2250.0;
@@ -77,26 +77,26 @@ int main() {
 	double ky_gra = 1659.3;
 	double cp_gra = 762.5;
 
-	// CPCM - Copper Foam
-	double porosity = 0.92;			// Copper foam
+	// Copper
 	double rho_cop = 8978.0;
 	double k_cop = 387.6;
 	double cp_cop = 381.0;
-	
+
+	// CPCM - Copper Foam
+	double porosity = 0.92;			// Copper foam
 	double rho_cpcm = porosity * rho_pcm + (1 - porosity) * rho_cop;
 	double k_cpcm = porosity * k_pcm + (1 - porosity) * k_cop;
-	double cp_cpcm = porosity * cp_pcm + (1 - porosity) * cp_cop;
-	double L_cpcm = porosity * L_pcm;
-
+	double cp_cpcm = (porosity * rho_pcm * cp_pcm + (1 - porosity) * rho_cop * cp_cop) / rho_cpcm;
+	double L_cpcm = (porosity * rho_pcm / rho_cpcm) * L_pcm;
+	
 	if (pouch == 2) // Full PCM
 	{
-		porosity = 1;
-		double rho_cpcm = porosity * rho_pcm + (1 - porosity) * rho_cop;
-		double k_cpcm = porosity * k_pcm + (1 - porosity) * k_cop;
-		double cp_cpcm = porosity * cp_pcm + (1 - porosity) * cp_cop;
-		double L_cpcm = porosity * L_pcm;
+		rho_cpcm = rho_pcm;
+		k_cpcm = k_pcm;
+		cp_cpcm = cp_pcm;
+		L_cpcm = L_pcm;
 	}
-	else if (pouch = 3) // Full CPCM
+	else if (pouch == 3) // Full CPCM
 	{
 		rho_pcm = rho_cpcm;
 		k_pcm = k_cpcm;
@@ -105,7 +105,7 @@ int main() {
 	}
 
 	// Cold Plate
-	double h_cp = 120;
+	double h_cp = 200;
 	double T_cp = 15;
 
 	// Natural Convection
@@ -139,6 +139,7 @@ int main() {
 	double* f = (double*)malloc((N) * sizeof(double));
 	double* b = (double*)malloc((N) * sizeof(double));
 	double* T = (double*)malloc((N) * sizeof(double));
+	double* L = (double*)malloc((N) * sizeof(double));
 
 	for (int i = 0; i < N; i++) 
 	{
@@ -163,6 +164,7 @@ int main() {
 		ky[i] = 0.0;
 		f[i] = 0.0;
 		b[i] = 0.0;
+		L[i] = 0.0;
 		T[i] = Tinitial;
 	}	
 
@@ -171,6 +173,7 @@ int main() {
 	int it = 0;						// Iterations counter
 	int active = 0;					// Active liquid cooling
 	double time = 0.0;				// Current time step [s] 
+	bool print_now = true;
 	int previous_time = 0;
 
 	// Simulation timer
@@ -180,26 +183,30 @@ int main() {
 	int o = path(Nx, Ny, pp, ee, ww, nn, ss);
 	map(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu,
 		k_cpcm,	kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat,
-		cp_pcm, cp_alu, cp_cpcm, cp_gra, pp, R, kx, ky, rho, cp);
+		cp_pcm, cp_alu, cp_cpcm, cp_gra, L_pcm, L_cpcm, pp, R, kx, ky, rho, cp, L);
 	
 	// Store initial mesh info
 	log(time, o, pp, R, T, f, results);
-	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, results);
+	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, L, results);
 	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, time, results);
 	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 
-	// Resíduos (SOR, liquid fraction and conductivity)
+	// Resï¿½duos (SOR, liquid fraction and conductivity)
 	double resmax = 1.0E-4;
 	double resf = 1.0;
-	double resk = 1.0;
+	double resk = 0.0;
 
 	// Start simulation!
 	start = clock();		// Start timer!
 
 	while (time < TotalTime) 
 	{
-		printf("\n// -------------------- Time Step = %5.3fs -------------------- // \n", time);
-		
+
+		if (print_now)
+		{
+			printf("\n// -------------------- Time Step = %5.3fs -------------------- // \n", time);
+		}
+
 		for (int i = 0; i < N; i++)
 		{
 			// Copy previous time step data and check liquid cooling condition
@@ -215,43 +222,57 @@ int main() {
 		}
 
 		// Compute nonlinear conducticity
-		nonlinear_cond(o, pp, R, f, kx, ky, &resk);
+		//nonlinear_cond(o, pp, R, f, kx, ky, &resk);
 		
 		// Init residue and number of iterations
 		resf = 1.0;
-		resk = 1.0;
+		resk = 0.0;
 		it = 0;
 
 		while (resf > resmax || resk > resmax)
 		{
 			// Coefficients matrix setup
-			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L_pcm, L_cpcm, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
+			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active);
 
 			// Linear system solver
 			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
 			//SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, time, results);	
 
 			// Compute liquid fraction
-			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, dt, L_pcm, L_cpcm, Tmelt, &resf);
+			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, L, dt, Tmelt, &resf);
 
 			// Compute nonlinear conducticity
-			nonlinear_cond(o, pp, R, f, kx, ky, &resk);
+			//nonlinear_cond(o, pp, R, f, kx, ky, &resk);
 
 			it++;
-			printf("\Iteration = %i\t resf = %5.1E\t resk = %5.1E\n", it, resf, resk);
+			if (print_now)
+			{
+				//printf("\Iteration = %i\t resf = %5.1E\t resk = %5.1E\n", it, resf, resk);
+			}
 		}
 		
 		time = time + dt;
 		
+		
 		// Print time step info
+		//log_plot(time, o, pp, R, T, f);
 		log(time, o, pp, R, T, f, results);
 		if ((previous_time != int(time)) && (int(time) % 50 == 0))
 		{
-			previous_time = int(time);
 			plot_sim(o, Nx, Ny, dx, dy, pp, T, f, time, results);
 			//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 		}
 
+		if ((previous_time != int(time)) && (int(time) % 10 == 0))
+		{
+			print_now = true;
+			previous_time = int(time);
+		}
+		else
+		{
+			previous_time = int(time);
+			print_now = false;
+		}
 	}
 
 	end = clock(); // Stop timer!
