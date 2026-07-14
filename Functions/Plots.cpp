@@ -1,6 +1,6 @@
 #include "..\Headers\Include.h"
 
-void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, int* ee, int* nn, int* ss, int* R, double* kx, double* ky, double* rho, double* cp, double* L, string dir) {
+void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, int* ee, int* nn, int* ss, int* R, double* kx, double* ky, double* rho, double* cp, double* L, int* batt_pos, string dir) {
 
 	double rx{}, ry{};
 
@@ -53,7 +53,7 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 		fout << pp[a] << endl;
 	}
 
-	// Write PPs
+	// Write WWs
 	fout << "SCALARS ww int" << endl;
 	fout << "LOOKUP_TABLE ww" << endl;
 
@@ -62,7 +62,7 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 		fout << ww[pp[a]] << endl;
 	}
 
-	// Write PPs
+	// Write EEs
 	fout << "SCALARS ee int" << endl;
 	fout << "LOOKUP_TABLE ee" << endl;
 
@@ -71,7 +71,7 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 		fout << ee[pp[a]] << endl;
 	}
 
-	// Write PPs
+	// Write NNs
 	fout << "SCALARS nn int" << endl;
 	fout << "LOOKUP_TABLE nn" << endl;
 
@@ -80,7 +80,7 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 		fout << nn[pp[a]] << endl;
 	}
 
-	// Write PPs
+	// Write SSs
 	fout << "SCALARS ss int" << endl;
 	fout << "LOOKUP_TABLE ss" << endl;
 
@@ -141,6 +141,15 @@ void plot_mesh(int o, int Nx, int Ny, double dx, double dy, int* pp, int* ww, in
 	for (int a = 0; a < o; a++)
 	{
 		fout << L[pp[a]] << endl;
+	}
+
+	// Write Cell Batt Position Information
+	fout << "SCALARS Batt_Pos int" << endl;
+	fout << "LOOKUP_TABLE Batt_Pos" << endl;
+
+	for (int a = 0; a < o; a++)
+	{
+		fout << batt_pos[pp[a]] << endl;
 	}
 
 	// Exit
@@ -275,7 +284,7 @@ void plot_coef(int o, int Nx, int Ny, double dx, double dy, int* pp, double* aw,
 
 }
 
-void plot_sim(int o, int Nx, int Ny, double dx, double dy, int* pp, double* T, double* f, double time, string results_folder) {
+void plot_sim(int o, int Nx, int Ny, double dx, double dy, int* pp, double* T, double* f, int* R, double time, string results_folder) {
 
 	double rx{}, ry{};
 	struct stat sb;
@@ -351,6 +360,15 @@ void plot_sim(int o, int Nx, int Ny, double dx, double dy, int* pp, double* T, d
 		fout << f[pp[a]] << endl;
 	}
 
+	// Write Region Information
+	fout << "SCALARS Region int" << endl;
+	fout << "LOOKUP_TABLE Region" << endl;
+
+	for (int a = 0; a < o; a++)
+	{
+		fout << R[pp[a]] << endl;
+	}
+
 	// Exit
 	fout.close();
 	cout << "\nDone." << endl << endl;
@@ -392,12 +410,14 @@ string create_results_folder() {
 	return results_folder;
 }
 
-void log(double time, int o, int* pp, int* R, double* T, double* f, string results_folder) {
+void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double q_dot, string results_folder) {
 
 	double delta_temp = 0.0;
 	double max_temp = 0.0;
 	double min_temp = 1000.0;
 	double total_f = 0.0;
+	double tmax_pcm = 0.0;
+	double tmed_pcm = 0.0;
 	int can_melt = 0;
 	int l = 0;
 
@@ -420,15 +440,21 @@ void log(double time, int o, int* pp, int* R, double* T, double* f, string resul
 		if (R[l] == 0 || R[l] == 5)
 		{
 			total_f = total_f + f[l];
+			tmed_pcm = tmed_pcm + T[l];
 			can_melt++;
+			if (T[l] > tmax_pcm)
+			{
+				tmax_pcm = T[l];
+			}
 		}
 	}
 
 	delta_temp = max_temp - min_temp;
 	total_f = total_f / can_melt;
+	tmed_pcm = tmed_pcm / can_melt;
 
 	fout.open(filename, std::ios_base::app);
-	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << endl;
+	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << '\t' << tmax_pcm << '\t' << tmed_pcm << '\t' << q_dot << endl;
 	fout.close();
 
 	//cout << "Max temperature:" << max_temp << endl;
