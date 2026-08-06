@@ -130,11 +130,16 @@
   <ItemGroup>
     <ClCompile Include="Functions\Model.cpp" />
     <ClCompile Include="Functions\Plots.cpp" />
+    <ClCompile Include="Functions\ReadData.cpp" />
     <ClCompile Include="Functions\Solver.cpp" />
     <ClCompile Include="VCM2D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Headers\Include.h" />
+    <ClInclude Include="VCM2D.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Input.yaml" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -7,7 +7,7 @@ sim = 3; % 1.REF-PCM / 2.REF-CPCM / 3.REF-DOUBLE / 4.3C-PCM / 5.3C-CPCM / 6.3C-D
 save = false;
 
 % Results folder
-results_folder = 'Results_2025_01_29_10_00_36';
+results_folder = 'Results_2025_10_19_10_14_36';
     
 %% Result files
 [filepath,~,~] = fileparts(mfilename('fullpath'));

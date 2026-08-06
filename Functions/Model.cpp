@@ -214,7 +214,7 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 	cout << "\nMap time: " << time_taken << " s " << endl;
 }
 
-void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, int active, double* T_fluid, double q_dot) 
+void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, bool cooling_active, double* T_fluid, double q_dot, int* batt_pos, bool tr_started, int tr_cell, double tr_q_dot, double tr_time, double tr_duration)
 {
 	int i, j, m, l;
 
@@ -272,12 +272,12 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 				su[l] = su[l] + (h_cp * T_cp) / dy;
 				sp[l] = sp[l] - (h_cp) / dy;
 			}
-			else if (type == 3 && active == 1)
+			else if (type == 3 && cooling_active == true)
 			{
 				su[l] = su[l] + (h_cp * T_cp) / dy;
 				sp[l] = sp[l] - (h_cp) / dy;
 			}
-			else if (type == 4 && active == 1)
+			else if (type == 4 && cooling_active == true)
 			{
 				su[l] = su[l] + (h_cp * T_fluid[l]) / dy;
 				sp[l] = sp[l] - (h_cp) / dy;
@@ -293,10 +293,18 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 			}
 		}
 		else if (type == 4)
-		{
+		{ 
 			if (R[l] == 1)
 			{
-				su[l] = su[l] + q_dot;
+				if (tr_started == true && batt_pos[l] == tr_cell)
+				{
+					su[l] = su[l] + tr_q_dot;
+					//printf("Thermal runaway with %5.2f W/m3 of heat source\n", q_dot_tr);
+				}
+				else
+				{
+					su[l] = su[l] + q_dot;
+				}
 			}
 		}
 
@@ -449,45 +457,4 @@ int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
 		//printf("pp = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", l, ww[l], ee[l], nn[l], ss[l]);
 	}
 	return o;
-}
-
-void nonlinear_cond(int o, int* pp, int* R, double* f, double* kx, double* ky, double* resk)
-{
-	int j;
-	double res = 0.0, ka;
-	double a = 1.0;
-
-	for (int i = 0; i < o; i++)
-	{
-		if (pp[i] != 0 && R[pp[i]] == 0) // PCM
-		{
-			j = pp[i];
-			ka = kx[j];
-
-			kx[j] = 0.425 * (1 - f[j]) + 0.152 * f[j]; // Conductivity based on liquid fraction
-			ky[j] = kx[j];
-
-			res = res + fabs(kx[j] - ka);
-			if (fabs(kx[j] - ka) > 1.0E-05)
-			{
-				a++;
-			}
-		}
-		else if (pp[i] != 0 && R[pp[i]] == 5) // PCM
-		{
-			j = pp[i];
-			ka = kx[j];
-
-			kx[j] = 31.39 * (1 - f[j]) + 31.15 * f[j]; // Conductivity based on liquid fraction
-			ky[j] = kx[j];
-
-			res = res + fabs(kx[j] - ka);
-			if (fabs(kx[j] - ka) > 1.0E-05)
-			{
-				a++;
-			}
-		}
-	}
-
-	*resk = res / a;
 }

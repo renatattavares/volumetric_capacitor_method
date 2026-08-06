@@ -20,7 +20,8 @@ void read_data(string filename,
     double& rho_cpcm, double& k_cpcm, double& cp_cpcm, double& L_cpcm,
     int& lines_batt_mod, int& cols_batt_mod,
     double& m_dot, double& cp_liq,
-    vector<double>& times, vector<double>& q_dots)
+    vector<double>& times, vector<double>& q_dots, 
+    bool& tr_active, int& tr_cell, double& tr_q_dot, double& tr_time, double& tr_duration)
 {
     YAML::Node config = YAML::LoadFile(filename);
 
@@ -108,6 +109,14 @@ void read_data(string filename,
     int size_times = static_cast<int>(times.size());
     int size_qdots = static_cast<int>(q_dots.size());
     assert(size_times + 1 == size_qdots);
+
+    auto tr = config["thermal_runaway"];
+    tr_cell = tr["cell"].as<int>();
+    tr_active = tr["active"].as<bool>();
+    tr_q_dot = tr["q_dot"].as<double>();
+    tr_time = tr["time"].as<double>();
+    tr_duration = tr["duration"].as<double>();
+
 
     if (pouch == 1) // Double
     {

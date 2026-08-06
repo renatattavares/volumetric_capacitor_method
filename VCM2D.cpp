@@ -1,10 +1,14 @@
  #include "Headers/Include.h"
+#include "VCM2D.h"
 
 int main() {
 
 	int type, pouch;
 	int N, Nx, Ny;
 	int lines_batt_mod, cols_batt_mod;
+	int tr_cell;
+	bool tr_active;
+	double tr_q_dot;
 	double Lx, Ly;
 	double TotalTime, dt;
 	double dx, dy;
@@ -21,11 +25,12 @@ int main() {
 	double porosity;
 	double h_cp, T_cp, h_air, T_air;
 	double m_dot, cp_liq;
+	double tr_time, tr_duration;
 	vector<double> times;
 	vector<double> q_dots;
 	
 	
-	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn, qs, qe, qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra, kx_gra, ky_gra, cp_gra, rho_cop, k_cop, cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm, k_cpcm, cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots);
+	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn, qs, qe, qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra, kx_gra, ky_gra, cp_gra, rho_cop, k_cop, cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm, k_cpcm, cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration);
 	
 	// --------------------------- INIT SIMULATION DATA ------------------------- //
 	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm, lines_batt_mod, cols_batt_mod);
@@ -88,13 +93,15 @@ int main() {
 	}
 
 	// -------------------------- INITIALIZATION ----------------------- //
-	int i = 0;						// Counter
-	int it = 0;						// Iterations counter
-	int active = 0;					// Active liquid cooling
+	
 	double time = 0.0;				// Current time step [s] 
 	double q_dot = 0.0;
-	bool print_now = true;
+	int i = 0;						// Counter
+	int it = 0;						// Iterations counter
 	int previous_time = 0;
+	bool print_now = true;
+	bool cooling_active = false;	// Liquid cooling active
+	bool tr_started = false;		// Thermal runaway event has started
 
 	// Simulation timer
 	clock_t start, end;
@@ -107,7 +114,7 @@ int main() {
 	// Store initial mesh info
 	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, L, batt_pos, results);
 	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
-	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
+	plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 	plot_log(time, o, pp, R, T, f, q_dot, results);
 
 	// Res�duos (SOR, liquid fraction and conductivity)
@@ -132,20 +139,17 @@ int main() {
 			Ti[i] = T[i];
 			fi[i] = f[i];
 
-			if (fi[i] > 0 && active == 0 && (type == 3 || type == 4))
-			{
-				active = 1;
-				printf("Liquid cooling activated at %5.3fs\n", time);
-			}
+			//if (fi[i] > 0 && cooling_active == false && (type == 3 || type == 4))
+			//{
+			//	cooling_active = true;
+			//	printf("Liquid cooling activated at %5.3fs\n", time);
+			//}
 		}
 
-		if (type == 4 && active == 1)
+		if (type == 4 && cooling_active == true)
 		{
 			fluid_temp(o, pp, N, Ny, T, batt_pos, T_fluid, T_cp, h_cp, m_dot, cp_liq, cols_batt_mod);
 		}
-
-		// Compute nonlinear conducticity
-		//nonlinear_cond(o, pp, R, f, kx, ky, &resk);
 
 		// Init residue and number of iterations
 		resf = 1.0;
@@ -158,10 +162,21 @@ int main() {
 			if (type == 4)
 			{
 				get_q_dot(time, times, q_dots, q_dot);
+
+				if (time >= tr_time && time <= tr_time + tr_duration && tr_active == true && tr_started == false)
+				{
+					tr_started = true;
+					printf("Thermal runaway started at %5.3fs\n", time);
+				}
+				else if((time < tr_time || time > (tr_time + tr_duration)) && tr_started == true)
+				{
+					tr_started = false;
+					printf("Thermal runaway stoped at %5.3fs\n", time);
+				}
 			}
 			
 			// Coefficients matrix setup
-			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, active, T_fluid, q_dot);
+			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, cooling_active, T_fluid, q_dot, batt_pos, tr_started, tr_cell, tr_q_dot, tr_time, tr_duration);
 
 			// Linear system solver
 			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
@@ -169,9 +184,6 @@ int main() {
 
 			// Compute liquid fraction
 			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, L, dt, Tmelt, &resf);
-
-			// Compute nonlinear conducticity
-			//nonlinear_cond(o, pp, R, f, kx, ky, &resk);
 
 			it++;
 			if (print_now)
@@ -184,13 +196,13 @@ int main() {
 
 		// Print time step info
 		plot_log(time, o, pp, R, T, f, q_dot, results);
-		if ((previous_time != int(time)) && (int(time) % 20 == 0))
+		if ((previous_time != int(time)) && (int(time) % 5 == 0))
 		{
 			plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
-			//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
+			plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 		}
 
-		if ((previous_time != int(time)) && (int(time) % 20 == 0))
+		if ((previous_time != int(time)) && (int(time) % 5 == 0))
 		{
 			print_now = true;
 			previous_time = int(time);
