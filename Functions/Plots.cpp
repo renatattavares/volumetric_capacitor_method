@@ -410,7 +410,8 @@ string create_results_folder() {
 	return results_folder;
 }
 
-void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double q_dot, string results_folder) {
+void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double q_dot, double SOC, double it, double rref, string results_folder) 
+{
 
 	double delta_temp = 0.0;
 	double max_temp = 0.0;
@@ -450,11 +451,19 @@ void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double 
 	}
 
 	delta_temp = max_temp - min_temp;
-	total_f = total_f / can_melt;
-	tmed_pcm = tmed_pcm / can_melt;
+	if (can_melt != 0)
+	{
+		total_f = total_f / can_melt;
+		tmed_pcm = tmed_pcm / can_melt;
+	}
+	else
+	{
+		total_f = 0.0;
+		tmed_pcm = 0.0;
+	}
+		fout.open(filename, std::ios_base::app);
 
-	fout.open(filename, std::ios_base::app);
-	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << '\t' << tmax_pcm << '\t' << tmed_pcm << '\t' << q_dot << endl;
+	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << '\t' << tmax_pcm << '\t' << tmed_pcm << '\t' << q_dot << '\t' << SOC << '\t' << it << '\t' << rref << endl;
 	fout.close();
 
 	//cout << "Max temperature:" << max_temp << endl;

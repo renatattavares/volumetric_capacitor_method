@@ -48,7 +48,6 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 			//printf("CV = %4i\t x_center = %4.5f\t y_center = %4.5f\t radius = %4.5f\t R = %4i\n", m, x_center, y_center, radius, R[m]);
 		}
 	}
-
 	else if(type == 2) // Pouch cell - Baseline design 
 	{
 		int i, l, a, m, b;
@@ -97,7 +96,6 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 			}
 		}
 	}
-
 	else if (type == 3 || type == 4) // Battery module
 	{
 
@@ -106,7 +104,7 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 			lines_batt_mod = 8;
 			cols_batt_mod = 1;
 		}
-		
+
 		int i, j, a, b, c, m, z;
 		double x, y;
 		double x_center, y_center;
@@ -138,7 +136,7 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 			x = x_center - offsetx; // X center
 			y = y_center - offsety; // Y center
 
-			// decidir subsegmento por comparações simples
+			// decidir subsegmento por comparaï¿½ï¿½es simples
 			if (x > 0 and x < a_fin)
 			{
 				R[m] = 6; // Graphite Region
@@ -199,6 +197,60 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 				}
 			}
 			else if (x > a_pouch2)
+			{
+				R[m] = 6; // Graphite Region
+				kx[m] = kx_gra;
+				ky[m] = ky_gra;
+				rho[m] = rho_gra;
+				cp[m] = cp_gra;
+			}
+		}
+	}
+	else if (type == 5)
+	{
+		int i, j, a, b, c, m, z;
+		double x;
+		double x_center;
+		double offsetx;
+		int Nx_ghosts = Nx + 2;
+		int	Ny_ghosts = Ny + 2;
+
+		double block_width = t_fin + t;
+		double totalX = cols_batt_mod * block_width + t_fin;
+		double a_fin = t_fin;
+		double a_cell = a_fin + t;
+
+		for (z = 0; z < o; z++)
+		{
+			m = pp[z];
+			i = (int)m / Ny_ghosts;
+			j = (int)m - i * Ny_ghosts;
+
+			x_center = (dx * 0.5) + (i - 1) * dx;
+
+			batt_pos[m] = min(int(floor(x_center / block_width) + 1), cols_batt_mod);
+			offsetx = floor(x_center / block_width) * block_width;
+
+			x = x_center - offsetx; // X center
+
+			// decidir subsegmento por comparaï¿½ï¿½es simples
+			if (x > 0 and x < a_fin)
+			{
+				R[m] = 6; // Graphite Region
+				kx[m] = kx_gra;
+				ky[m] = ky_gra;
+				rho[m] = rho_gra;
+				cp[m] = cp_gra;
+			}
+			else if (x > a_fin and x < a_cell)
+			{
+				R[m] = 1; // Battery Region
+				kx[m] = kx_bat;
+				ky[m] = ky_bat;
+				rho[m] = rho_bat;
+				cp[m] = cp_bat;
+			}
+			else if (x > a_cell)
 			{
 				R[m] = 6; // Graphite Region
 				kx[m] = kx_gra;
@@ -292,7 +344,7 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 				su[l] = su[l] + Q;
 			}
 		}
-		else if (type == 4)
+		else if (type == 4 || type == 5)
 		{ 
 			if (R[l] == 1)
 			{
@@ -397,8 +449,8 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 	{	
 		int batts = 8;
 		int fins = 9;
-		Lx = batts * t + fins * t_fin;			// Mesh size in x direcition [m] 
-		Ly = l;									// Mesh size in y direcition [m]
+		Lx = batts * t + fins * t_fin;	// Mesh size in x direcition [m] 
+		Ly = l;							// Mesh size in y direcition [m]
 	}
 	else if (type == 3)
 	{
@@ -408,10 +460,15 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 		Lx = batts * t + fins * t_fin + pcms * t_pcm;	// Mesh size in x direcition [m] 
 		Ly = l;											// Mesh size in y direcition [m]
 	}
-	else if (type = 4)
+	else if (type == 4)
 	{
-		Lx = cols_batt_mod * t + (cols_batt_mod + 1) * t_fin + (2 * cols_batt_mod) * t_pcm;			// Mesh size in x direcition [m] 
-		Ly = lines_batt_mod * l;			// Mesh size in y direcition [m]
+		Lx = cols_batt_mod * t + (cols_batt_mod + 1) * t_fin + (2 * cols_batt_mod) * t_pcm;		// Mesh size in x direcition [m] 
+		Ly = lines_batt_mod * l;																// Mesh size in y direcition [m]
+	}
+	else if (type == 5)
+	{
+		Lx = cols_batt_mod * t + (cols_batt_mod + 1) * t_fin;	// Mesh size in x direcition [m] 
+		Ly = lines_batt_mod * l;								// Mesh size in y direcition [m]
 	}
 
 	Nx = round(Lx / dx);				// Volumes in x direction
@@ -457,4 +514,82 @@ int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
 		//printf("pp = %i\t ww = %5.1i\t ee = %5.1i\t nn = %5.1i\t ss = %5.1i\n", l, ww[l], ee[l], nn[l], ss[l]);
 	}
 	return o;
+}
+
+double lookup_linear_clipped(double SOC, const std::vector<double>& soc_tab, const std::vector<double>& rref_tab)
+{
+	if (soc_tab.size() != rref_tab.size() || soc_tab.empty()) {
+		throw std::invalid_argument("Tabelas SOC e Rref inv?lidas.");
+	}
+
+	// clipping nas bordas
+	if (SOC <= soc_tab.front()) {
+		return rref_tab.front();
+	}
+	if (SOC >= soc_tab.back()) {
+		return rref_tab.back();
+	}
+
+	// encontrar intervalo [i, i+1] tal que soc_tab[i] <= soc <= soc_tab[i+1]
+	auto it = std::lower_bound(soc_tab.begin(), soc_tab.end(), SOC);
+	std::size_t i1 = static_cast<std::size_t>(it - soc_tab.begin());
+	std::size_t i0 = i1 - 1;
+
+	double x0 = soc_tab[i0];
+	double x1 = soc_tab[i1];
+	double y0 = rref_tab[i0];
+	double y1 = rref_tab[i1];
+
+	// interpola??o linear
+	double t = (SOC - x0) / (x1 - x0);
+	return y0 + t * (y1 - y0);
+}
+
+
+void get_q_dot(double time, vector<double> times, vector<double> q_dots, vector<double> current, double& SOC, double& SOCi, double cell_capacity, double& q_dot, double& i, double& rref, double dt)
+{
+	bool testing_cell_resistance = true;
+
+	if (testing_cell_resistance == true)
+	{
+		i = select_data_in_time(time, times, current);
+
+		// Calculation of cell State of Charge 
+		SOC = (SOCi/100 - ((i * (dt / 3600)) / (cell_capacity/1000))) * 100; // SOC in percentage
+
+		// Dados da tabela (SOC e Rref,dis)
+		std::vector<double> soc_tab = { 10, 20, 30, 40, 50, 60, 70, 80, 90 };
+		std::vector<double> rref_dis = { 12.17, 12.17, 12.11, 12.09, 11.94, 12.00, 12.50, 12.65, 12.87 };
+
+		rref = lookup_linear_clipped(SOC, soc_tab, rref_dis);
+		q_dot = i * i * (rref/1000) / 0.000023;
+	}
+	else
+	{
+		q_dot = select_data_in_time(time, times, q_dots);
+	}
+}
+
+double select_data_in_time(double time, vector<double> times, vector<double> data)
+{
+	double selected_data = 0.0;
+	int size_times = static_cast<int>(times.size());
+
+	if (time > times[size_times - 1])
+	{
+		selected_data = data[size_times];
+	}
+	else
+	{
+		for (int i = 0; i < size_times; i++)
+		{
+			if (time <= times[i])
+			{
+				selected_data = data[i];
+				break;
+			}
+		}
+	}
+
+	return selected_data;
 }

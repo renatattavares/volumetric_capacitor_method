@@ -1,7 +1,7 @@
  #include "Headers/Include.h"
-#include "VCM2D.h"
 
-int main() {
+int main() 
+{
 
 	int type, pouch;
 	int N, Nx, Ny;
@@ -26,11 +26,12 @@ int main() {
 	double h_cp, T_cp, h_air, T_air;
 	double m_dot, cp_liq;
 	double tr_time, tr_duration;
+	double SOCinit, cell_capacity;
 	vector<double> times;
 	vector<double> q_dots;
+	vector<double> current;
 	
-	
-	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn, qs, qe, qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra, kx_gra, ky_gra, cp_gra, rho_cop, k_cop, cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm, k_cpcm, cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration);
+	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn, qs, qe, qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra, kx_gra, ky_gra, cp_gra, rho_cop, k_cop, cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm, k_cpcm, cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration, SOCinit, current, cell_capacity);
 	
 	// --------------------------- INIT SIMULATION DATA ------------------------- //
 	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm, lines_batt_mod, cols_batt_mod);
@@ -62,7 +63,7 @@ int main() {
 	double* T = (double*)malloc((N) * sizeof(double));
 	double* L = (double*)malloc((N) * sizeof(double));
 	double* T_fluid = (double*)malloc((N) * sizeof(double));;
-
+	
 	for (int i = 0; i < N; i++) 
 	{
 		R[i] = 0;
@@ -91,14 +92,17 @@ int main() {
 		T[i] = Tinitial;
 		T_fluid[i] = T_cp;
 	}
-
-	// -------------------------- INITIALIZATION ----------------------- //
 	
+	// -------------------------- INITIALIZATION ----------------------- //
+	double SOCi = 0.0;
+	double SOC = SOCinit;
 	double time = 0.0;				// Current time step [s] 
 	double q_dot = 0.0;
-	int i = 0;						// Counter
+	double i_t = 0.0;				// Cell current [A]
+	double rref = 0.0;				// Cell internal resistance [miliOhm]
 	int it = 0;						// Iterations counter
 	int previous_time = 0;
+	int print_every = 10;			// Print every X seconds
 	bool print_now = true;
 	bool cooling_active = false;	// Liquid cooling active
 	bool tr_started = false;		// Thermal runaway event has started
@@ -110,17 +114,15 @@ int main() {
 	int o = path(Nx, Ny, pp, ee, ww, nn, ss);
 	map_mesh(type, o, Nx, Ny, dx, dy, D, t, l, t_fin, t_pcm, kx_bat, ky_bat, k_pcm, k_alu, k_cpcm, kx_gra, ky_gra, rho_bat, rho_pcm, rho_alu, rho_cpcm, rho_gra, cp_bat, cp_pcm, cp_alu, cp_cpcm, cp_gra, L_pcm, L_cpcm, pp, R, kx, ky, rho, cp, L, lines_batt_mod, cols_batt_mod, batt_pos);
 
-
 	// Store initial mesh info
 	plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, L, batt_pos, results);
 	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
 	plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
-	plot_log(time, o, pp, R, T, f, q_dot, results);
+	plot_log(time, o, pp, R, T, f, q_dot, SOC, i_t, rref, results);
 
-	// Res�duos (SOR, liquid fraction and conductivity)
+	// Resíduos (SOR, liquid fraction and conductivity)
 	double resmax = 1.0E-4;
 	double resf = 1.0;
-	double resk = 0.0;
 
 	// Start simulation!
 	start = clock();		// Start timer!
@@ -133,36 +135,38 @@ int main() {
 			printf("\n// -------------------- Time Step = %5.3fs -------------------- // \n", time);
 		}
 
+		// ---------- Copy previous time step data and check liquid cooling condition ---------- //
 		for (int i = 0; i < N; i++)
-		{
-			// Copy previous time step data and check liquid cooling condition
+		{	
 			Ti[i] = T[i];
 			fi[i] = f[i];
-
-			//if (fi[i] > 0 && cooling_active == false && (type == 3 || type == 4))
-			//{
-			//	cooling_active = true;
-			//	printf("Liquid cooling activated at %5.3fs\n", time);
-			//}
+			/*
+			if (fi[i] > 0 && cooling_active == false && (type == 3 || type == 4))
+			{
+				cooling_active = true;
+				printf("Liquid cooling activated at %5.3fs\n", time);
+			}
+			*/
 		}
+		SOCi = SOC;
+		// ------------------------------------------------------------------------------------- //
 
-		if (type == 4 && cooling_active == true)
+		if ((type == 4 || type == 5) && cooling_active == true)
 		{
 			fluid_temp(o, pp, N, Ny, T, batt_pos, T_fluid, T_cp, h_cp, m_dot, cp_liq, cols_batt_mod);
 		}
 
 		// Init residue and number of iterations
 		resf = 1.0;
-		resk = 0.0;
 		it = 0;
 
-		while (resf > resmax || resk > resmax)
+		while (resf > resmax)
 		{
 			// Get Heat generation for module simulation
-			if (type == 4)
+			if (type == 4 || type == 5)
 			{
-				get_q_dot(time, times, q_dots, q_dot);
-
+				get_q_dot(time, times, q_dots, current, SOC, SOCi, cell_capacity, q_dot, i_t, rref, dt);
+				
 				if (time >= tr_time && time <= tr_time + tr_duration && tr_active == true && tr_started == false)
 				{
 					tr_started = true;
@@ -180,29 +184,28 @@ int main() {
 
 			// Linear system solver
 			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
-			//SIP(o, N, pp, nn, ss, ee, ww, ap, ae, aw, an, as, b, T, Nx, Ny, dx, dy, time, results);	
-
+			
 			// Compute liquid fraction
 			SORf(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti, R, f, fi, rho, L, dt, Tmelt, &resf);
 
 			it++;
 			if (print_now)
 			{
-				printf("\Iteration = %i\t resf = %5.1E\n", it, resf);
+				printf("Iteration = %i\t resf = %5.5f\t SOC = %5.5f\n", it, resf, SOC);
 			}
 		}
 
 		time = time + dt;
 
 		// Print time step info
-		plot_log(time, o, pp, R, T, f, q_dot, results);
-		if ((previous_time != int(time)) && (int(time) % 5 == 0))
+		plot_log(time, o, pp, R, T, f, q_dot, SOC, i_t, rref, results);
+		
+		if ((previous_time != int(time)) && (int(time) % print_every == 0))
 		{
 			plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
-			plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 		}
 
-		if ((previous_time != int(time)) && (int(time) % 5 == 0))
+		if ((previous_time != int(time)) && (int(time) % print_every == 0))
 		{
 			print_now = true;
 			previous_time = int(time);
@@ -243,6 +246,6 @@ int main() {
 	free(b);
 	free(T);
 	free(f);
-	
+
 	return 0;
 }

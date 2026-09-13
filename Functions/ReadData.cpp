@@ -20,8 +20,9 @@ void read_data(string filename,
     double& rho_cpcm, double& k_cpcm, double& cp_cpcm, double& L_cpcm,
     int& lines_batt_mod, int& cols_batt_mod,
     double& m_dot, double& cp_liq,
-    vector<double>& times, vector<double>& q_dots, 
-    bool& tr_active, int& tr_cell, double& tr_q_dot, double& tr_time, double& tr_duration)
+    vector<double>& times, vector<double>& q_dots,
+    bool& tr_active, int& tr_cell, double& tr_q_dot, double& tr_time, double& tr_duration,
+    double& SOCinit, vector<double>& current, double& cell_capacity)
 {
     YAML::Node config = YAML::LoadFile(filename);
 
@@ -106,6 +107,9 @@ void read_data(string filename,
     auto mis = config["mission"];
     q_dots = mis["q_dot"].as<std::vector<double>>();
     times = mis["times"].as<std::vector<double>>();
+    SOCinit = mis["SOCinit"].as<double>();
+    current = mis["current"].as<std::vector<double>>();
+    cell_capacity = mis["cell_capacity"].as<double>();
     int size_times = static_cast<int>(times.size());
     int size_qdots = static_cast<int>(q_dots.size());
     assert(size_times + 1 == size_qdots);
@@ -143,27 +147,4 @@ void read_data(string filename,
         cp_pcm = cp_cpcm;
         L_pcm = L_cpcm;
     }
-
-}
-
-void get_q_dot(double time, vector<double> times, vector<double> q_dots, double& q_dot)
-{
-    int size_times = static_cast<int>(times.size());
-
-    if (time > times[size_times - 1])
-    {
-        q_dot = q_dots[size_times];
-    }
-    else
-    {
-        for (int i = 0; i < size_times; i++)
-        {
-            if (time <= times[i])
-            {
-                q_dot = q_dots[i];
-                break;
-            }
-        }
-    }
-    //printf("Time = %5.3f\t Q_dot = %5.3f\n", time, q_dot);
 }
