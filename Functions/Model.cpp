@@ -266,7 +266,7 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 	cout << "\nMap time: " << time_taken << " s " << endl;
 }
 
-void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, bool cooling_active, double* T_fluid, double q_dot, int* batt_pos, bool tr_started, int tr_cell, double tr_q_dot, double tr_time, double tr_duration)
+void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, bool cooling_active, double* T_fluid, double q_dot, int* batt_pos, bool tr_started, int tr_cell, double tr_q_dot, double tr_time, double tr_duration, vector<double> variable_q_dots, bool variable_q_dot)
 {
 	int i, j, m, l;
 
@@ -353,6 +353,10 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 					su[l] = su[l] + tr_q_dot;
 					//printf("Thermal runaway with %5.2f W/m3 of heat source\n", q_dot_tr);
 				}
+				else if (variable_q_dot == true)
+				{
+					su[l] = su[l] + variable_q_dots[batt_pos[l] - 1];
+				}
 				else
 				{
 					su[l] = su[l] + q_dot;
@@ -438,8 +442,8 @@ void fluid_temp(int o, int* pp, int N, int Ny, double* T, int* batt_pos, double*
 }
 
 void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly,
-	double dx, double dy, double t, double l, double t_fin, double t_pcm, int lines_batt_mod, int cols_batt_mod) {
-
+	double dx, double dy, double t, double l, double t_fin, double t_pcm, int lines_batt_mod, int cols_batt_mod) 
+{
 	if (type == 1)
 	{
 		Lx = 0.05;			// Mesh size in x direcition [m] 
@@ -485,8 +489,8 @@ void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly
 	cout << "Total number of cells: " << N << endl;
 }
 
-int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
-
+int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) 
+{
 	int i, j, l, o, m;
 
 	o = 0;
@@ -516,80 +520,4 @@ int path(int Nx, int Ny, int* pp, int* ee, int* ww, int* nn, int* ss) {
 	return o;
 }
 
-double lookup_linear_clipped(double SOC, const std::vector<double>& soc_tab, const std::vector<double>& rref_tab)
-{
-	if (soc_tab.size() != rref_tab.size() || soc_tab.empty()) {
-		throw std::invalid_argument("Tabelas SOC e Rref inv?lidas.");
-	}
 
-	// clipping nas bordas
-	if (SOC <= soc_tab.front()) {
-		return rref_tab.front();
-	}
-	if (SOC >= soc_tab.back()) {
-		return rref_tab.back();
-	}
-
-	// encontrar intervalo [i, i+1] tal que soc_tab[i] <= soc <= soc_tab[i+1]
-	auto it = std::lower_bound(soc_tab.begin(), soc_tab.end(), SOC);
-	std::size_t i1 = static_cast<std::size_t>(it - soc_tab.begin());
-	std::size_t i0 = i1 - 1;
-
-	double x0 = soc_tab[i0];
-	double x1 = soc_tab[i1];
-	double y0 = rref_tab[i0];
-	double y1 = rref_tab[i1];
-
-	// interpola??o linear
-	double t = (SOC - x0) / (x1 - x0);
-	return y0 + t * (y1 - y0);
-}
-
-
-void get_q_dot(double time, vector<double> times, vector<double> q_dots, vector<double> current, double& SOC, double& SOCi, double cell_capacity, double& q_dot, double& i, double& rref, double dt)
-{
-	bool testing_cell_resistance = true;
-
-	if (testing_cell_resistance == true)
-	{
-		i = select_data_in_time(time, times, current);
-
-		// Calculation of cell State of Charge 
-		SOC = (SOCi/100 - ((i * (dt / 3600)) / (cell_capacity/1000))) * 100; // SOC in percentage
-
-		// Dados da tabela (SOC e Rref,dis)
-		std::vector<double> soc_tab = { 10, 20, 30, 40, 50, 60, 70, 80, 90 };
-		std::vector<double> rref_dis = { 12.17, 12.17, 12.11, 12.09, 11.94, 12.00, 12.50, 12.65, 12.87 };
-
-		rref = lookup_linear_clipped(SOC, soc_tab, rref_dis);
-		q_dot = i * i * (rref/1000) / 0.000023;
-	}
-	else
-	{
-		q_dot = select_data_in_time(time, times, q_dots);
-	}
-}
-
-double select_data_in_time(double time, vector<double> times, vector<double> data)
-{
-	double selected_data = 0.0;
-	int size_times = static_cast<int>(times.size());
-
-	if (time > times[size_times - 1])
-	{
-		selected_data = data[size_times];
-	}
-	else
-	{
-		for (int i = 0; i < size_times; i++)
-		{
-			if (time <= times[i])
-			{
-				selected_data = data[i];
-				break;
-			}
-		}
-	}
-
-	return selected_data;
-}

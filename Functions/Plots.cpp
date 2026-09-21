@@ -164,7 +164,7 @@ void plot_coef(int o, int Nx, int Ny, double dx, double dy, int* pp, double* aw,
 	double rx{}, ry{};
 	struct stat sb;
 	string iteration = to_string(int(time));
-	string title = "Coefficients °C plot";
+	string title = "Coefficients ï¿½C plot";
 	string info = "SCALARS Coefficients float";
 	string filename;
 	string property = "Coef";
@@ -376,8 +376,8 @@ void plot_sim(int o, int Nx, int Ny, double dx, double dy, int* pp, double* T, d
 	return;
 }
 
-string create_results_folder() {
-
+string create_results_folder() 
+{
 	// Get the current time
 	time_t t = time(nullptr);
 	tm* now = localtime(&t);
@@ -479,7 +479,7 @@ void plot_res(int o, int Nx, int Ny, double dx, double dy, int* pp, double* P, i
 
 	string sim_time = to_string(0);//to_string(time);
 	string iteration = to_string(it);
-	string title = "Residue °C plot";
+	string title = "Residue ï¿½C plot";
 	string info = "SCALARS Residue float";
 	string filename;
 
@@ -579,8 +579,8 @@ void log_plot(double time, int o, int* pp, int* R, double* T, double* f) {
 
 }
 
-void log_res(double time, int o, int* pp, int* R, double* T, double* f, string results_folder) {
-
+void log_res(double time, int o, int* pp, int* R, double* T, double* f, string results_folder) 
+{
 	double delta_temp = 0.0;
 	double max_temp = 0.0;
 	double min_temp = 1000.0;
@@ -623,4 +623,33 @@ void log_res(double time, int o, int* pp, int* R, double* T, double* f, string r
 	//cout << "Delta temperature:" << delta_temp << endl;
 	//cout << "Liquid Fraction:" << total_f << endl;
 
+}
+
+void plot_qdot(double time, double SOC, double it, vector<double> variable_q_dots, vector<double> T_ave_cell, string results_folder)
+{	
+	int l = 0;
+
+	// Log file
+	ofstream fout;
+	string filename;
+	filename = results_folder + "/log_qdot.dat";
+
+	fout.open(filename, std::ios_base::app);
+
+	int X = variable_q_dots.size();
+
+	fout << time << '\t' << it << '\t' << SOC << '\t';
+
+	for (int i = 0; i < X; i++) 
+	{
+		fout << T_ave_cell[i] << '\t';
+	}
+
+	for (int i = 0; i < X; i++)
+	{
+		fout << variable_q_dots[i] << '\t';
+	}
+
+	fout << endl;
+	fout.close();
 }
