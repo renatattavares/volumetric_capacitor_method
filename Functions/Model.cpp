@@ -266,7 +266,7 @@ void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, d
 	cout << "\nMap time: " << time_taken << " s " << endl;
 }
 
-void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, bool cooling_active, double* T_fluid, double q_dot, int* batt_pos, bool tr_started, int tr_cell, double tr_q_dot, double tr_time, double tr_duration, vector<double> variable_q_dots, bool variable_q_dot)
+void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, int* ww, int* ee, int* nn, int* ss, double* kx, double* ky, double* ap, double* aw, double* ae, double* an, double* as, double* su, double* sp, double* b, double Tw, double Te, double Tn, double Ts, double qw, double qe, double qn, double qs, double* T, double* Ti, double* rho, double* cp, double* L, double* f, double* fi, int* R, double Q, double dt, double h_cp, double T_cp, double h_air, double T_air, double w, bool cooling_active, double* T_fluid, double q_dot, int* batt_pos, bool tr_started, int tr_cell, double tr_q_dot, double tr_time, double tr_duration, vector<double> cell_heat_dissipation)
 {
 	int i, j, m, l;
 
@@ -329,9 +329,9 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 				su[l] = su[l] + (h_cp * T_cp) / dy;
 				sp[l] = sp[l] - (h_cp) / dy;
 			}
-			else if (type == 4 && cooling_active == true)
+			else if ((type == 4 || type == 5) && cooling_active == true)
 			{
-				su[l] = su[l] + (h_cp * T_fluid[l]) / dy;
+  				su[l] = su[l] + (h_cp * T_fluid[l]) / dy;
 				sp[l] = sp[l] - (h_cp) / dy;
 			}
 		}
@@ -353,13 +353,9 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 					su[l] = su[l] + tr_q_dot;
 					//printf("Thermal runaway with %5.2f W/m3 of heat source\n", q_dot_tr);
 				}
-				else if (variable_q_dot == true)
-				{
-					su[l] = su[l] + variable_q_dots[batt_pos[l] - 1];
-				}
 				else
 				{
-					su[l] = su[l] + q_dot;
+					su[l] = su[l] + cell_heat_dissipation[batt_pos[l] - 1];
 				}
 			}
 		}
@@ -371,7 +367,7 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 	}
 }
 
-void fluid_temp(int o, int* pp, int N, int Ny, double* T, int* batt_pos, double* T_fluid, double T_cp, double h_cp, double m_dot, double cp_liq, int cols_batt_mod)
+void fluid_temp(int o, int* pp, int N, int Ny, double* T, int* batt_pos, double* T_fluid, double T_cp, double h_cp, double m_dot, double t, double w, double cp_liq, int cols_batt_mod)
 {
 	int i, j, m, l, pos;
 	vector<double> Tave(cols_batt_mod);
@@ -417,7 +413,7 @@ void fluid_temp(int o, int* pp, int N, int Ny, double* T, int* batt_pos, double*
 		}
 		else
 		{
-			Tcorner[i] = Tcorner[i - 1] + (((h_cp * 0.008 * 0.1) / (m_dot * cp_liq)) * (Tave[i-1] - Tcorner[i - 1]));
+			Tcorner[i] = Tcorner[i - 1] + (((h_cp * t * w) / (m_dot * cp_liq)) * (Tave[i-1] - Tcorner[i - 1]));
 		}
 		//printf("i = %i\t Tcorner = %5.3f\n", i, Tcorner[i]);
 	}

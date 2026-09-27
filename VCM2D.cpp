@@ -6,7 +6,7 @@ int main()
 	int N, Nx, Ny;
 	int lines_batt_mod, cols_batt_mod;
 	int tr_cell;
-	bool tr_active, variable_q_dot, charge;
+	bool variable_resistance, charge;
 	double tr_q_dot;
 	double Lx, Ly;
 	double TotalTime, dt, SimTotalTime;
@@ -25,12 +25,13 @@ int main()
 	double h_cp, T_cp, h_air, T_air;
 	double m_dot, cp_liq;
 	double tr_time, tr_duration;
-	double SOCinit, cell_capacity, charge_rate;
+	bool tr_active;
+	double SOCinit, cell_capacity, charge_rate, max_charge_temp;
 	vector<double> times;
 	vector<double> q_dots;
 	vector<double> current;
 	
-	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn, qs, qe, qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra, kx_gra, ky_gra, cp_gra, rho_cop, k_cop, cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm, k_cpcm, cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration, SOCinit, current, cell_capacity, variable_q_dot, charge, charge_rate);
+	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn,  qs, qe,  qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra,  kx_gra,  ky_gra, cp_gra, rho_cop,  k_cop,  cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm,  k_cpcm,  cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration, SOCinit, current, cell_capacity, variable_resistance, charge, charge_rate, max_charge_temp);
 	
 	// --------------------------- INIT SIMULATION DATA ------------------------- //
 	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm, lines_batt_mod, cols_batt_mod);
@@ -97,8 +98,6 @@ int main()
 	double SOC = SOCinit;
 	double time = 0.0;				// Current time step [s] 
 	double q_dot = 0.0;
-	double i_t = 0.0;				// Cell current [A]
-	double rref = 0.0;				// Cell internal resistance [miliOhm]
 	int it = 0;						// Iterations counter
 	int k = 0;						// Mesh element index
 	int cell_pos = 0;				// Battery cell index
@@ -106,12 +105,14 @@ int main()
 	int print_every = 5;			// Print every X seconds
 	bool print_now = true;
 	bool cooling_active = false;	// Liquid cooling active
+	bool charging_active = false;	// Charging has started
 	bool tr_started = false;		// Thermal runaway event has started
+	bool cooling_mission = false;
 	int const total_cells = lines_batt_mod * cols_batt_mod;
 	std::vector<double> T_ave_cell(total_cells);
 	std::vector<double> sum_T_dV(total_cells);
 	std::vector<double> sum_dV(total_cells);
-	std::vector<double> variable_q_dots(total_cells);
+	std::vector<double> cell_heat_dissipation(total_cells);
 
 	// Simulation timer
 	clock_t start, end;
@@ -122,7 +123,7 @@ int main()
 
 	// Store initial mesh info
 	plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
-	plot_log(time, o, pp, R, T, f, q_dot, SOC, i_t, rref, results);
+	plot_log(time, o, pp, R, T, f, SOC, results);
 	//plot_mesh(o, Nx, Ny, dx, dy, pp, ww, ee, nn, ss, R, kx, ky, rho, cp, L, batt_pos, results);
 	//plot_coef(o, Nx, Ny, dx, dy, pp, aw, ae, an, as, ap, b, time, results);
 	
@@ -145,13 +146,13 @@ int main()
 
 		// ---------- Copy previous time step data and check liquid cooling condition ---------- //
 		for (int i = 0; i < o; i++)
-		{	
+		{
 			if (pp[i] != 0)
 			{
 				Ti[pp[i]] = T[pp[i]];
 				fi[pp[i]] = f[pp[i]];	
 
-				if ((type == 4 || type == 5) && (variable_q_dot == true) && (R[pp[i]] == 1))
+				if ((type == 4 || type == 5) && (variable_resistance == true) && (R[pp[i]] == 1))
 				{
 					k = pp[i];
 					cell_pos = batt_pos[k] - 1;
@@ -159,26 +160,26 @@ int main()
 					sum_dV[cell_pos] += dx * dy * w;
 				}
 			}
-
-			/*
-			if (fi[i] > 0 && cooling_active == false && (type == 3 || type == 4))
+			if (cooling_active == false && ((cooling_mission == true && fi[i] > 0 && (type == 3 || type == 4)) || (time > TotalTime && (type == 4 || type == 5))))
 			{
 				cooling_active = true;
 				printf("Liquid cooling activated at %5.3fs\n", time);
 			}
-			*/
 		}
 
 		SOCi = SOC;
 
-		for (int i = 0; i < total_cells; i++)
+		if (variable_resistance == true && (type == 4 || type == 5))
 		{
-			T_ave_cell[i] = sum_T_dV[i] / sum_dV[i];
-		}
+			for (int i = 0; i < total_cells; i++)
+			{
+				T_ave_cell[i] = sum_T_dV[i] / sum_dV[i];
+			}
+		} 
 
-		if ((type == 4 || type == 5) && cooling_active == true)
+		if (cooling_active == true && (type == 4 || type == 5))
 		{
-			fluid_temp(o, pp, N, Ny, T, batt_pos, T_fluid, T_cp, h_cp, m_dot, cp_liq, cols_batt_mod);
+			fluid_temp(o, pp, N, Ny, T, batt_pos, T_fluid, T_cp, h_cp, m_dot, t, w, cp_liq, cols_batt_mod);
 		}
 
 		// Init residue and number of iterations
@@ -190,8 +191,8 @@ int main()
 			// Get Heat generation for module simulation
 			if (type == 4 || type == 5)
 			{
-				get_q_dot(time, TotalTime, times, q_dots, current, T_ave_cell, SOC, SOCi, cell_capacity, q_dot, i_t, rref, dt, t, l, w, variable_q_dot, total_cells, variable_q_dots, charge, charge_rate);
-				
+				get_q_dot(charging_active, time, o, pp, T, R, TotalTime, SimTotalTime, times, q_dots, current, T_ave_cell, SOC, SOCi, cell_capacity, dt, t, l, w, variable_resistance, total_cells, cell_heat_dissipation, charge, charge_rate, max_charge_temp);
+				/*
 				if (time >= tr_time && time <= tr_time + tr_duration && tr_active == true && tr_started == false)
 				{
 					tr_started = true;
@@ -202,10 +203,11 @@ int main()
 					tr_started = false;
 					printf("Thermal runaway stoped at %5.3fs\n", time);
 				}
+				*/
 			}
 			
 			// Coefficients matrix setup
-			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, cooling_active, T_fluid, q_dot, batt_pos, tr_started, tr_cell, tr_q_dot, tr_time, tr_duration, variable_q_dots, variable_q_dot);
+			assembly(o, pp, type, Nx, Ny, dx, dy, ww, ee, nn, ss, kx, ky, ap, aw, ae, an, as, su, sp, b, Tw, Te, Tn, Ts, qw, qe, qn, qs, T, Ti, rho, cp, L, f, fi, R, Q, dt, h_cp, T_cp, h_air, T_air, w, cooling_active, T_fluid, q_dot, batt_pos, tr_started, tr_cell, tr_q_dot, tr_time, tr_duration, cell_heat_dissipation);
 
 			// Linear system solver
 			SORt(o, pp, ww, ee, nn, ss, ap, aw, ae, an, as, b, T, Ti);
@@ -223,14 +225,13 @@ int main()
 		time = time + dt;
 
 		// Print time step info
-		plot_log(time, o, pp, R, T, f, q_dot, SOC, i_t, rref, results);
-		plot_qdot(time, SOC, it, variable_q_dots, T_ave_cell, results);
+		plot_log(time, o, pp, R, T, f, SOC, results);
+		plot_qdot(time, SOC, it, cell_heat_dissipation, T_ave_cell, results);
 		
 		if ((previous_time != int(time)) && (int(time) % print_every == 0))
 		{
 			plot_sim(o, Nx, Ny, dx, dy, pp, T, f, R, time, results);
 		}
-
 		if ((previous_time != int(time)) && (int(time) % print_every == 0))
 		{
 			print_now = true;
@@ -240,6 +241,11 @@ int main()
 		{
 			previous_time = int(time);
 			print_now = false;
+		}
+	
+		if (charge == true && charging_active == false && cooling_active == true)
+		{
+			SimTotalTime += dt;  
 		}
 	}
 

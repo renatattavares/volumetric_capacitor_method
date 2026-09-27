@@ -410,7 +410,7 @@ string create_results_folder()
 	return results_folder;
 }
 
-void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double q_dot, double SOC, double it, double rref, string results_folder) 
+void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double SOC, string results_folder) 
 {
 
 	double delta_temp = 0.0;
@@ -430,22 +430,25 @@ void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double 
 	for (int i = 0; i < o; i++)
 	{
 		l = pp[i];
-		if (T[l] > max_temp && R[l] == 1)
+		if (l != 0)
 		{
-			max_temp = T[l];
-		}
-		if (T[l] < min_temp && R[l] == 1)
-		{
-			min_temp = T[l];
-		}
-		if (R[l] == 0 || R[l] == 5)
-		{
-			total_f = total_f + f[l];
-			tmed_pcm = tmed_pcm + T[l];
-			can_melt++;
-			if (T[l] > tmax_pcm)
+			if (T[l] > max_temp && R[l] == 1)
 			{
-				tmax_pcm = T[l];
+				max_temp = T[l];
+			}
+			if (T[l] < min_temp && R[l] == 1)
+			{
+				min_temp = T[l];
+			}
+			if (R[l] == 0 || R[l] == 5)
+			{
+				total_f = total_f + f[l];
+				tmed_pcm = tmed_pcm + T[l];
+				can_melt++;
+				if (T[l] > tmax_pcm)
+				{
+					tmax_pcm = T[l];
+				}
 			}
 		}
 	}
@@ -463,7 +466,7 @@ void plot_log(double time, int o, int* pp, int* R, double* T, double* f, double 
 	}
 		fout.open(filename, std::ios_base::app);
 
-	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << '\t' << tmax_pcm << '\t' << tmed_pcm << '\t' << q_dot << '\t' << SOC << '\t' << it << '\t' << rref << endl;
+	fout << time << '\t' << max_temp << '\t' << min_temp << '\t' << delta_temp << '\t' << total_f << '\t' << tmax_pcm << '\t' << tmed_pcm << '\t' << SOC << endl;
 	fout.close();
 
 	//cout << "Max temperature:" << max_temp << endl;
