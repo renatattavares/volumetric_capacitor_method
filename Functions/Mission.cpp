@@ -1,6 +1,6 @@
 #include "..\Headers\Include.h"
 
-void get_q_dot(bool& charging_active, double time, int o, int* pp, double* T, int* R, double TotalTime, double SimTotalTime, vector<double> times, vector<double> q_dots, vector<double> current, vector<double> T_ave_cell, double& SOC, double& SOCi, double cell_capacity, double dt, double t, double l, double w, bool variable_resistance, int total_cells, vector<double>& cell_heat_dissipation, bool charge, double charge_rate, double max_charge_temp)
+void get_q_dot(bool& charging_active, double Tinitial, double SOCinit, double time, int o, int* pp, double* T, int* R, double TotalTime, double SimTotalTime, vector<double> times, vector<double> q_dots, vector<double> current, vector<double> T_ave_cell, double& SOC, double& SOCi, double cell_capacity, double dt, double t, double l, double w, bool variable_resistance, int total_cells, vector<double>& cell_heat_dissipation, bool charge, double charge_rate, double max_charge_temp)
 {
 	double max_batt_temp = 0.0;
 	int p;
@@ -20,7 +20,7 @@ void get_q_dot(bool& charging_active, double time, int o, int* pp, double* T, in
 					}
 				}
 			}
-			if (max_batt_temp > max_charge_temp)
+			if (max_batt_temp > max_charge_temp || (max_batt_temp > Tinitial && SOC >= SOCinit))
 			{
 				for (int j = 0; j < total_cells; j++)
 				{
@@ -37,30 +37,42 @@ void get_q_dot(bool& charging_active, double time, int o, int* pp, double* T, in
 				
 				// Calculation of cell State of Charge 
 				SOC = (SOCi/100 + ((i * (dt / 3600)) / (cell_capacity/1000))) * 100; // SOC in percentage
+				
+				if (variable_resistance == true)
+				{
+					// Dados da tabela (SOC e Rref,dis)
+					vector<double> soc_tab = {20, 30, 40, 50, 60, 70, 80, 90};
+					vector<double> rref_dis_tab = {12.17, 12.11, 12.09, 11.94, 12.00, 12.50, 12.65, 12.87};					
 
+					for (int j = 0; j < total_cells; j++)
+					{
+						double rref = lookup_linear_clipped(SOC, soc_tab, rref_dis_tab);
+						cell_heat_dissipation[j] = i * i * ((rref)/1000) / (t*l*w);
+					}
+				}
+				/*
 				if (variable_resistance == true)
 				{
 					// Dados da tabela (SOC e Rref,dis)
 					vector<double> soc_tab = {10, 20, 30, 40, 50, 60, 70, 80};
 					vector<double> rref_charge_tab = {15.72, 14.45, 14.50, 14.42, 13.95, 14.00, 14.58, 15.05};
 
-					vector<double> temp_tab = {26, 30, 35, 40};
-					vector<double> Tfactor_tab = {1.0, 0.881, 0.732, 0.583};
+					//vector<double> temp_tab = {26, 30, 35, 40};
+					//vector<double> Tfactor_tab = {1.0, 0.881, 0.732, 0.583};
 					
 					for (int j = 0; j < total_cells; j++)
 					{
 						double rref = lookup_linear_clipped(SOC, soc_tab, rref_charge_tab);
-						double Tfactor = lookup_linear_clipped(T_ave_cell[j], temp_tab, Tfactor_tab);
-						cell_heat_dissipation[j] = i * i * ((rref * Tfactor)/1000) / (t*l*w);
+						cell_heat_dissipation[j] = i * i * ((rref)/1000) / (t*l*w);
 					}			
 				}
+				*/
 				else
 				{
 					double rref = 4; // Constant resistance in mOhm
-					double Tfactor = 1; // Constant temperature factor
 					for (int j = 0; j < total_cells; j++)
 					{
-						cell_heat_dissipation[j] = i * i * ((rref * Tfactor)/1000) / (t*l*w);
+						cell_heat_dissipation[j] = i * i * ((rref)/1000) / (t*l*w);
 					}
 				}
 			}
@@ -78,31 +90,27 @@ void get_q_dot(bool& charging_active, double time, int o, int* pp, double* T, in
 				vector<double> soc_tab = {20, 30, 40, 50, 60, 70, 80, 90};
 				vector<double> rref_dis_tab = {12.17, 12.11, 12.09, 11.94, 12.00, 12.50, 12.65, 12.87};
 					
-				vector<double> temp_tab = {26, 30, 35, 40};
-				vector<double> Tfactor_tab = {1.0, 0.881, 0.732, 0.583};
+				//vector<double> temp_tab = {26, 30, 35, 40};
+				//vector<double> Tfactor_tab = {1.0, 0.881, 0.732, 0.583};
 
 				for (int j = 0; j < total_cells; j++)
 				{
 					double rref = lookup_linear_clipped(SOC, soc_tab, rref_dis_tab);
-					double Tfactor = lookup_linear_clipped(T_ave_cell[j], temp_tab, Tfactor_tab);
-					cell_heat_dissipation[j] = i * i * ((rref * Tfactor)/1000) / (t*l*w);
+					cell_heat_dissipation[j] = i * i * ((rref)/1000) / (t*l*w);
 				}
 			}
 			else
 			{
 				double rref = 4; 
-				double Tfactor = 1;
 				for (int j = 0; j < total_cells; j++)
 				{
-					cell_heat_dissipation[j] = i * i * ((rref * Tfactor)/1000) / (t*l*w);
+					cell_heat_dissipation[j] = i * i * ((rref)/1000) / (t*l*w);
 				}
 			}		
 		}
 	}
 	else
 	{
-		double rref = 4; 
-		double Tfactor = 1;
 		for (int j = 0; j < total_cells; j++)
 		{
 			cell_heat_dissipation[j] = select_data_in_time(time, times, q_dots);

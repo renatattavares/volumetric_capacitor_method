@@ -23,7 +23,7 @@ void read_data(string filename,
     vector<double>& times, vector<double>& q_dots,
     bool& tr_active, int& tr_cell, double& tr_q_dot, double& tr_time, double& tr_duration,
     double& SOCinit, vector<double>& current, double& cell_capacity, bool& variable_resistance,
-    bool& charge, double& charge_rate, double& max_charge_temp)
+    bool& charge, double& charge_rate, double& max_charge_temp, bool& cooling_mission)
 {
     YAML::Node config = YAML::LoadFile(filename);
 
@@ -115,6 +115,7 @@ void read_data(string filename,
     cell_capacity = mission["cell_capacity"].as<double>();
     charge_rate = mission["charge_rate"].as<double>();
     q_dots = mission["q_dot"].as<vector<double>>();
+    cooling_mission = mission["cooling"].as<bool>();
     int size_times = static_cast<int>(times.size());
     int size_qdots = static_cast<int>(q_dots.size());
     assert(size_times + 1 == size_qdots);

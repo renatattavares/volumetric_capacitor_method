@@ -48,7 +48,7 @@ void read_data(string filename,
     vector<double>& times, vector<double>& q_dots,
     bool& tr_active, int& tr_cell, double& tr_q_dot, double& tr_time, double& tr_duration,
     double& SOCinit, vector<double>& current, double& cell_capacity, bool& variable_resistance,
-    bool& charge, double& charge_rate, double& max_charge_temp);
+    bool& charge, double& charge_rate, double& max_charge_temp, bool& cooling_mission);
     
 void map_mesh(int type, int o, int Nx, int Ny, double dx, double dy, double D, double t, double l, double t_fin, double t_pcm, double kx_bat, double ky_bat, double k_pcm, double k_alu, double k_cpcm, double kx_gra, double ky_gra, double rho_bat, double rho_pcm, double rho_alu, double rho_cpcm, double rho_gra, double cp_bat, double cp_pcm, double cp_alu, double cp_cpcm, double cp_gra, double L_pcm, double L_cpcm, int* pp, int* R, double* kx, double* ky, double* rho, double* cp, double* L, int lines_batt_mod, int cols_batt_mod, int* batt_pos);
 
@@ -56,7 +56,7 @@ void assembly(int o, int* pp, int type, int Nx, int Ny, double dx, double dy, in
 
 void fluid_temp(int o, int* pp, int N, int Ny, double* T, int* batt_pos, double* T_fluid, double T_cp, double h_cp, double m_dot, double t, double w, double cp_liq, int cols_batt_mod);
 
-void get_q_dot(bool& charging_active, double time, int o, int* pp, double* T, int* R, double TotalTime, double SimTotalTime, vector<double> times, vector<double> q_dots, vector<double> current, vector<double> T_ave_cell, double& SOC, double& SOCi, double cell_capacity, double dt, double t, double l, double w, bool variable_resistance, int total_cells, vector<double>& cell_heat_dissipation, bool charge, double charge_rate, double max_charge_temp);
+void get_q_dot(bool& charging_active, double Tinitial, double SOCinit, double time, int o, int* pp, double* T, int* R, double TotalTime, double SimTotalTime, vector<double> times, vector<double> q_dots, vector<double> current, vector<double> T_ave_cell, double& SOC, double& SOCi, double cell_capacity, double dt, double t, double l, double w, bool variable_resistance, int total_cells, vector<double>& cell_heat_dissipation, bool charge, double charge_rate, double max_charge_temp);
 
 void set_mesh_problem(int type, int& N, int& Nx, int& Ny, double& Lx, double& Ly, double dx, double dy, double t, double l, double t_fin, double t_pcm, int lines_batt_mod, int cols_batt_mod);
 

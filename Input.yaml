@@ -5,7 +5,7 @@
 
 problem:
   type: 5               # 1 = Cylindrical, 2 = Pouch Baseline, 3 = Pouch Proposed, 4 = Module, 5 = Module with no PCM
-  pouch: 2              # 1 = Double, 2 = PCM, 3 = CPCM
+  pouch: 1              # 1 = Double, 2 = PCM, 3 = CPCM
 
 time:
   TotalTime: 858        # [s] 
@@ -79,9 +79,9 @@ cpcm:
 convection:
   cold_plate:
     h_cp: 1000          # [W/m².K]
-    T_cp: 10            # [°C]
-    m_dot: 1            # [kg/s]
-    cp_liq: 3260.75     # Considerando 15°C
+    T_cp: 25            # [°C]
+    m_dot: 0.40         # [kg/s]
+    cp_liq: 3338        # Considerando 15°C
 
   natural:
     h_air: 2            # [W/m².K]      
@@ -89,19 +89,20 @@ convection:
 
 module:
   lines: 1
-  columns: 17
+  columns: 20
 
 mission:
     variable_resistance: false
     current: [64.6, 64.6, 37.5, 28.9, 22.5, 61.9, 61.9]           # Cell current per flight phase [A]
-    #times: [5, 6, 7, 8, 9, 10]                                   # [s]
     times: [12, 42, 126, 726, 810, 840]                           # [s]
+    #times: [5, 6, 7, 8, 9, 10]                                   # [s]
     SOCinit: 95                                                   # [%]
     cell_capacity: 10000                                          # [mAh]
     charge: true                                             # If true, the battery is charged at the end of the mission
     charge_rate: 3                                                # [C-rate]
     max_charge_temp: 45                                           # [°C]
     q_dot: [426264, 426264, 143623, 85208, 51512, 391091, 391091] # Thermal load per flight phase [W/m³]
+    cooling: false
     
 
 thermal_runaway:

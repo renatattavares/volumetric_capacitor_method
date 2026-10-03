@@ -25,13 +25,13 @@ int main()
 	double h_cp, T_cp, h_air, T_air;
 	double m_dot, cp_liq;
 	double tr_time, tr_duration;
-	bool tr_active;
+	bool tr_active, cooling_mission;
 	double SOCinit, cell_capacity, charge_rate, max_charge_temp;
 	vector<double> times;
 	vector<double> q_dots;
 	vector<double> current;
 	
-	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn,  qs, qe,  qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra,  kx_gra,  ky_gra, cp_gra, rho_cop,  k_cop,  cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm,  k_cpcm,  cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration, SOCinit, current, cell_capacity, variable_resistance, charge, charge_rate, max_charge_temp);
+	read_data("Input.yaml", type, pouch, TotalTime, dt, dx, dy, D, h, t, l, w, t_fin, t_pcm, Tinitial, Q, Tn, Ts, Te, Tw, qn,  qs, qe,  qw, rho_bat, kx_bat, ky_bat, cp_bat, rho_pcm, k_pcm, cp_pcm, L_pcm, Tmelt, rho_alu, k_alu, cp_alu, rho_gra,  kx_gra,  ky_gra, cp_gra, rho_cop,  k_cop,  cp_cop, porosity, h_cp, T_cp, h_air, T_air, rho_cpcm,  k_cpcm,  cp_cpcm, L_cpcm, lines_batt_mod, cols_batt_mod, m_dot, cp_liq, times, q_dots, tr_active, tr_cell, tr_q_dot, tr_time, tr_duration, SOCinit, current, cell_capacity, variable_resistance, charge, charge_rate, max_charge_temp, cooling_mission);
 	
 	// --------------------------- INIT SIMULATION DATA ------------------------- //
 	set_mesh_problem(type, N, Nx, Ny, Lx, Ly, dx, dy, t, l, t_fin, t_pcm, lines_batt_mod, cols_batt_mod);
@@ -107,7 +107,6 @@ int main()
 	bool cooling_active = false;	// Liquid cooling active
 	bool charging_active = false;	// Charging has started
 	bool tr_started = false;		// Thermal runaway event has started
-	bool cooling_mission = false;
 	int const total_cells = lines_batt_mod * cols_batt_mod;
 	std::vector<double> T_ave_cell(total_cells);
 	std::vector<double> sum_T_dV(total_cells);
@@ -160,11 +159,25 @@ int main()
 					sum_dV[cell_pos] += dx * dy * w;
 				}
 			}
-			if (cooling_active == false && ((cooling_mission == true && fi[i] > 0 && (type == 3 || type == 4)) || (time > TotalTime && (type == 4 || type == 5))))
+			if (cooling_active == false && cooling_mission == true && fi[i] > 0 && (type == 3 || type == 4))
 			{
 				cooling_active = true;
 				printf("Liquid cooling activated at %5.3fs\n", time);
 			}
+		}
+		if (cooling_active == false && cooling_mission == true && (type == 4 || type == 5))
+		{
+			cooling_active = true;
+			printf("Liquid cooling activated at %5.3fs\n", time);
+		}
+		else if (cooling_active == false && (time > TotalTime) && (type == 4 || type == 5))
+		{
+			cooling_active = true;
+    		h_cp = 1000;
+    		T_cp = 15;    
+    		m_dot = 1.07;
+    		cp_liq = 3285; // Considerando 15°C
+			printf("GSE liquid cooling activated at %5.3fs\n", time);
 		}
 
 		SOCi = SOC;
@@ -191,7 +204,7 @@ int main()
 			// Get Heat generation for module simulation
 			if (type == 4 || type == 5)
 			{
-				get_q_dot(charging_active, time, o, pp, T, R, TotalTime, SimTotalTime, times, q_dots, current, T_ave_cell, SOC, SOCi, cell_capacity, dt, t, l, w, variable_resistance, total_cells, cell_heat_dissipation, charge, charge_rate, max_charge_temp);
+				get_q_dot(charging_active, Tinitial, SOCinit, time, o, pp, T, R, TotalTime, SimTotalTime, times, q_dots, current, T_ave_cell, SOC, SOCi, cell_capacity, dt, t, l, w, variable_resistance, total_cells, cell_heat_dissipation, charge, charge_rate, max_charge_temp);
 				/*
 				if (time >= tr_time && time <= tr_time + tr_duration && tr_active == true && tr_started == false)
 				{
@@ -242,11 +255,29 @@ int main()
 			previous_time = int(time);
 			print_now = false;
 		}
-	
+		
+		// -------------------- Dispacth cooling and charging conditions -------------------- //
 		if (charge == true && charging_active == false && cooling_active == true)
 		{
 			SimTotalTime += dt;  
 		}
+		double max_batt_temp = 0.0;
+		for (int i = 0; i < o; i++)
+		{
+			k = pp[i];
+			if (k != 0)
+			{
+				if (T[k] > max_batt_temp && R[k] == 1)
+				{
+					max_batt_temp = T[k];
+				}
+			}
+		}
+		if (time > TotalTime && (max_batt_temp > Tinitial && SOC >= SOCinit))
+		{
+			SimTotalTime += dt;  
+		}
+		// -------------------------------------------------------------------------------- //
 	}
 
 	end = clock(); // Stop timer!
